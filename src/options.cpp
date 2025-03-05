@@ -47,6 +47,11 @@ void Options::read_command_line_options(int argc, char** argv) {
             estimate_file = argv[++i];
             ss << "--estimate-file " << estimate_file << "\n";
         }
+        else if (!strcmp(argv[i], "--r1-add-info-file")) {
+            if (i == argc - 1) fail_if_last(argv, i);
+            r1_add_info_file = argv[++i];
+            ss << "---r1-add-info-file " << r1_add_info_file << "\n";
+        }
         else if (!strcmp(argv[i], "--freeze-index-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
             freeze_index_file = argv[++i];
@@ -62,13 +67,6 @@ void Options::read_command_line_options(int argc, char** argv) {
             run_mode = argv[++i];
             ss << "--run-mode " << run_mode << "\n";
         }
-        /*
-        else if (!strcmp(argv[i], "--dim-file")) {
-            if (i == argc - 1) fail_if_last(argv, i);
-            dim_file = argv[++i];
-            ss << "--dim-file " << dim_file << "\n";
-        }
-        */
         // List of phenotype files to read; comma separated if more than one.
         else if (!strcmp(argv[i], "--phen-files")) {
             if (i == argc - 1) fail_if_last(argv, i);
@@ -153,22 +151,6 @@ void Options::read_command_line_options(int argc, char** argv) {
                 nit++;
             }
         }
-        /* 
-        else if (!strcmp(argv[i], "--group-index-file")) {
-            if (i == argc - 1) fail_if_last(argv, i);
-            group_index_file = argv[++i];
-            ss << "--group-index-file " << group_index_file << "\n";
-        } 
-        else if (!strcmp(argv[i], "--group-mixture-file")) {
-            if (i == argc - 1) fail_if_last(argv, i);
-            group_mixture_file = argv[++i];
-            ss << "--group-mixture-file " << group_mixture_file << "\n";
-        } 
-        else if (!strcmp(argv[i], "--verbosity")) {
-            if (i == argc - 1) fail_if_last(argv, i);
-            verbosity = atoi(argv[++i]);
-            ss << "--verbosity " << verbosity << "\n";
-        } */
         else if (!strcmp(argv[i], "--use-lmmse-damp")) {
             if (i == argc - 1) fail_if_last(argv, i);
             if (atoi(argv[i + 1]) < 0) {
@@ -259,15 +241,6 @@ void Options::read_command_line_options(int argc, char** argv) {
             init_est = (unsigned int) atoi(argv[++i]);
             ss << "--init-est " << init_est << "\n";
         }
-        /*else if (!strcmp(argv[i], "--meth-imp")){
-            if (i == argc - 1) fail_if_last(argv, i);
-            if (atoi(argv[i + 1]) < 0) {
-                std::cout << "FATAL  : option --meth-imp has to be an integer! (" << argv[i + 1] << " was passed)" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-            meth_imp = (unsigned int) atoi(argv[++i]);
-            ss << "--meth-imp " << meth_imp << "\n";
-        }*/
         else if (!strcmp(argv[i], "--out-dir")) {
             if (i == argc - 1) fail_if_last(argv, i);
             out_dir = argv[++i];
@@ -287,20 +260,12 @@ void Options::read_command_line_options(int argc, char** argv) {
             model = argv[++i];
             ss << "--model " << model << "\n";
         }
-        /*else if (!strcmp(argv[i], "--predict")) {
-            predict_ = true;
-            ss << "--predict " << predict_ << "\n";
-        } */
         else if (!strcmp(argv[i], "--bim-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
             bim_file = argv[++i];
             ss << "--bim-file " << bim_file << "\n";
 
-        } /* else if (!strcmp(argv[i], "--ref-bim-file")) {
-            if (i == argc - 1) fail_if_last(argv, i);
-            ref_bim_file = argv[++i];
-            ss << "--ref-bim-file " << ref_bim_file << "\n";
-        } */ 
+        } 
         else if (!strcmp(argv[i], "--stop-criteria-thr")){ // strcmp return 0 if both strings are identical
             if (i == argc - 1) fail_if_last(argv, i);
             stop_criteria_thr = atof(argv[++i]);
@@ -330,6 +295,16 @@ void Options::read_command_line_options(int argc, char** argv) {
             if (i == argc - 1) fail_if_last(argv, i);
             gam1_init = atof(argv[++i]);
             ss << "--gam1-init " << gam1_init << "\n";
+        }
+        else if (!strcmp(argv[i], "--gam1-add-info")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            gam1_add_info = atof(argv[++i]);
+            ss << "--gam1-add-info " << gam1_add_info << "\n";
+        }
+        else if (!strcmp(argv[i], "--a-scale")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            a_scale = atof(argv[++i]);
+            ss << "--a-scale " << a_scale << "\n";
         }
         else if (!strcmp(argv[i], "--gamw-init")){ // strcmp return 0 if both strings are identical
             if (i == argc - 1) fail_if_last(argv, i);

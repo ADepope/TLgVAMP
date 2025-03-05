@@ -71,6 +71,9 @@ Currently supported input options to C++ version of the code:
 | `use-freeze` | indicates whether or not to freeze certain position in the inference process |
 | `freeze-index-file` | a file containing 0/1 assigned to the indices that are being freezed in the inference process |
 | `seed` | defines a seed for the gVAMP run (must be a non-negative integer) |
+| `r1-add-info-file` | path to file containing r1 vector used for transfer learning |
+| `gam1-add-info` | gamma1 value used with r1-add-info vector for transfer learning |
+| `a_scale` | a_scale used to weight likelihood contribution of sources in transfer learning |
 
 
 
