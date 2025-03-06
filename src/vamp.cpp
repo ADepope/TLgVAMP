@@ -55,7 +55,10 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()),
     redglob(opt.get_redglob()),
-    rank(rank)  {
+    rank(rank),
+    r1_add_info_file(opt.get_r1_add_info_file()),
+    gam1_add_info(opt.get_gam1_add_info()),
+    a_scale(opt.get_a_scale()) {
     x1_hat = std::vector<double> (M, 0.0);
     x2_hat = std::vector<double> (M, 0.0);
     r1 = std::vector<double> (M, 0.0);
@@ -111,7 +114,10 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     gamma_damp(opt.get_gamma_damp()),
     rank(rank),
     reverse(opt.get_use_XXT_denoiser()),
-    use_lmmse_damp(opt.get_use_lmmse_damp())  {
+    use_lmmse_damp(opt.get_use_lmmse_damp()),
+    r1_add_info_file(opt.get_r1_add_info_file()),
+    gam1_add_info(opt.get_gam1_add_info()),
+    a_scale(opt.get_a_scale())  {
     N = opt.get_N();
     Mt = opt.get_Mt();
     max_iter = opt.get_iterations();
@@ -137,10 +143,6 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
 
     MPI_Comm_size(MPI_COMM_WORLD, &nranks);   
 }
-
-//std::vector<double> predict(std::vector<double> est, data* dataset){
-//    return (*dataset).Ax(est.data());
-//}
 
 
 //*********************************
@@ -203,7 +205,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
     }
 
     // loading freeze index file
-
     std::vector<double> freeze_ind;
     if (use_freeze == 1)
         freeze_ind = read_vec_from_file(freeze_index_file, M, (*dataset).get_S());
@@ -211,7 +212,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
     std::vector<double> x1_hat_d(M, 0.0);
     std::vector<double> x1_hat_d_prev(M, 0.0);
     std::vector<double> x1_hat_stored(M, 0.0);
-    //std::vector<double> r1_prev(M, 0.0);
     std::vector<double> x1_hat_prev(M, 0.0);
     alpha1 = 0;
 
@@ -219,7 +219,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
     std::vector<double> y =  (*dataset).filter_pheno();
 
     // Gaussian noise start
-    // r1 = simulate(M, std::vector<double> {1.0/gam1}, std::vector<double> {1});
     r1 = std::vector<double> (M, 0.0);
 
     // restart option
@@ -231,14 +230,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
             r1_init[i] /= sqrt(N);
         r1 = r1_init;   
     }
-
-    // linear estimator
-    //r1 = (*dataset).ATx(y.data());
-    //for (int i0=0; i0<M; i0++)
-	//  r1[i0] = r1[i0]*M/N;    
-
-    //double scale_rho = exp( log(0.3)/max_iter );
-    //scale_rho = 1;
 
     // in case we initialize with an estimate of the signal
     if (init_est == 1){
@@ -255,6 +246,15 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
         x1_hat = x_est;
         r1 = x_est;
+    }
+
+    if (r1_add_info_file != ""){
+        int pos_dot = r1_add_info_file.find(".");
+        std::string end_r1_add_file_name = r1_add_info_file.substr(pos_dot + 1);
+        if (end_r1_add_file_name == "bin")
+            r1_add_info = mpi_read_vec_from_file(r1_add_info_file, M, (*dataset).get_S());
+        else
+            r1_add_info = read_vec_from_file(r1_add_info_file, M, (*dataset).get_S());
     }
 
     // starting VAMP iterations
@@ -275,9 +275,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
         // updating parameters of prior distribution
         probs_before = probs;
         vars_before = vars;
-
-        // if (it == 1)
-        //    gam1 = pow(calc_stdev(true_signal), -2); // setting the right gam1 at the beginning
 
         // keeping value of Onsager from a previous iteration
         double alpha1_prev = alpha1;
@@ -317,9 +314,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
             if (it <= 1)
                 break;
 
-            // because we want both EM updates to be performed by maximizing likelihood
-            // with respect to the old gamma
-            //updatePrior(0);
 
             gam1_reEst_prev = gam1;
             if (it > 1)
@@ -557,30 +551,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
         double start_CG = MPI_Wtime();
         if (reverse == 0){
 
-            /*
-            if (redglob == 1){
-                
-                LBglob = (*dataset).get_mbytes() / 10;
-                
-                std::random_device rd; // obtain a random number from hardware
-                std::mt19937 gen(rd()); // seed the generator
-                std::uniform_int_distribution<> distr(0, (*dataset).get_mbytes() - LBglob - 1); // define the range
-                SBglob = distr(gen); 
-
-                MPI_Barrier(MPI_COMM_WORLD);
-
-                MPI_Status status;
-
-                if (rank == 0)
-                    for (int ran = 1; ran < nranks; ran++)
-                        MPI_Send(&SBglob, 1, MPI_INT, ran, 0, MPI_COMM_WORLD);
-                else
-                    MPI_Recv(&SBglob, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-
-                MPI_Barrier(MPI_COMM_WORLD);
-            }
-            */
-
             std::vector<double> v;
             if (use_cross_val == 1)
                 v = (*dataset).ATx(y.data(), SBglob, LBglob);
@@ -619,18 +589,9 @@ std::vector<double> vamp::infere_linear(data* dataset){
         if (rank == 0)
             std::cout << "CG took "  << end_CG - start_CG << " seconds." << std::endl;
 
-        /*
-        if (calc_state_evo == 1){
-            std::tuple<double, double, double> state_evo_par1 = state_evo(2, gam2, gam_before, probs_before, vars_before, dataset);
-            std::cout << "gam1_bar = " << get<2>(state_evo_par1) << std::endl; 
-        }
-        */
 
         double start_onsager = MPI_Wtime();
-        //if (reverse == 0)
-            alpha2 = g2d_onsager(gam2, gamw, dataset);
-        //else if (reverse == 1)
-        //    alpha2 = g2d_onsagerAAT(gam2, gamw, dataset);
+        alpha2 = g2d_onsager(gam2, gamw, dataset);
         double end_onsager = MPI_Wtime();
 
         if (rank == 0)
@@ -722,11 +683,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
             std::cout << "true gam1 = " << Mt / se_dev_total1 << std::endl; 
 
         // learning a noise precision parameter
-        //if (reverse == 0)
-            updateNoisePrec(dataset);
-        //else if (reverse == 1)
-        //    updateNoisePrecAAT(dataset);
-   
+        updateNoisePrec(dataset);
+
         // printing out error measures
         err_measures(dataset, 2);
         

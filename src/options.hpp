@@ -56,7 +56,6 @@ public:
     double get_gamw_init() const { return gamw_init; }
     double get_gam1_init() const { return gam1_init; }
     double get_gam1_add_info() const { return gam1_add_info; }
-    double get_a_scale() const { return a_scale; }
     double get_gamma_damp() const { return gamma_damp; }
     
 

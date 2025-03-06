@@ -8,18 +8,19 @@ class vamp{
 
 private:
     int N, M, Mt, C, max_iter, rank, nranks;
-    double gam1, gam2, gam_before, eta1, eta2;  // linear model precisions
+    double gam1, gam2, gam_before, eta1, eta2, gam1_add_info;  // linear model precisions
     std::vector<double> gam1s, gam2s, R2trains;
     double tau1, tau2;                          // probit model precisions
     double alpha1, alpha2;                      // Onsager corrections
     double rho;                          // damping factor
     double gamw;                                // linear model noise precision 
+    double a_scale;
 
     std::vector<double> x1_hat, x2_hat, true_signal;
     std::vector<double> z1_hat, z2_hat;
     std::vector<double> y;                              // phenotype vector
     std::vector<double> z1;                             // z1 = A * x1_hat 
-    std::vector<double> r1, r2, r2_prev;
+    std::vector<double> r1, r2, r2_prev, r1_add_info;
     std::vector<double> p1, p2;
     std::vector<double> cov_eff;                        // covariates in a probit model
     std::vector<double> mu_CG_last;                     // last LMMSE estimate
@@ -69,6 +70,7 @@ private:
 
     std::string estimate_file;
     std::string freeze_index_file;
+    std::string r1_add_info_file;
 
 public:
 
