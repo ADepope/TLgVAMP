@@ -97,6 +97,7 @@ public:
     // DENOISING PROCEDURES & ONSAGER CALCULATION
     //********************************************
     double g1(double x, double gam1);
+    double g1_transfer(double r1, double gam1, double r1_add, double gam1_add, double a_scale);
     double g1_bin_class(double p, double tau1, double y, double m_cov);
     double g1d(double x, double gam1);
     double g1d_bin_class(double p, double tau1, double y, double m_cov);
