@@ -825,6 +825,80 @@ double vamp::g1_transfer(double r1,
     return Num / Den;
 }
 
+double vamp::g1d_transfer(double r1, 
+                          double gam1, 
+                          double r1_add,
+                          double gam1_add,
+                          double a_scale) {
+
+    double lambda = 1 - probs[0];
+
+    std::vector<double> omegas = probs;
+    for (int j = 1; j < omegas.size(); j++) // omegas is of length L
+    omegas[j] /= lambda;
+
+    // Compute sigma2_meta = 1.0 / (sum(a_scale * gam1s) + 1.0/vars)
+    double sum_a_gam1s = a_scale * gam1 + (1-a_scale) * gam1_add;
+    std::vector<double> sigma2_meta(vars.size());
+    for (size_t i = 0; i < vars.size(); ++i) {
+        sigma2_meta[i] = 1.0 / (sum_a_gam1s + 1.0 / vars[i]);
+    }
+
+    // Compute mu_meta = np.inner(rs, a * gam1s) * sigma2_meta
+    std::vector<double> mu_meta(vars.size());
+    for (size_t i = 0; i < vars.size(); ++i) {
+        mu_meta[i] = (r1 * gam1 * a_scale + r1_add * gam1_add * (1-a_scale)) / (sum_a_gam1s + 1.0 / vars[i]);
+    }
+
+    // Find max_ind = argmax(mu_meta^2 / sigma2_meta)
+    std::vector<double> ratio(mu_meta.size());
+    std::transform(mu_meta.begin(), mu_meta.end(), sigma2_meta.begin(), ratio.begin(),
+    [](double mu, double sigma) { return (mu * mu) / sigma; });
+
+    int max_ind = std::distance(ratio.begin(), std::max_element(ratio.begin(), ratio.end()));
+
+    // Compute EXP
+    std::vector<double> EXP(mu_meta.size());
+    double max_mu_sq = mu_meta[max_ind] * mu_meta[max_ind];
+
+    std::transform(mu_meta.begin(), mu_meta.end(), sigma2_meta.begin(), EXP.begin(),
+    [max_mu_sq, max_ind, &sigma2_meta](double mu, double sigma) {
+        return std::exp(0.5 * ((mu * mu * sigma2_meta[max_ind] - max_mu_sq * sigma) /
+                                (sigma * sigma2_meta[max_ind])));
+    });
+
+    double Num = 0.0;
+    for (size_t i = 0; i < omegas.size(); ++i) {
+    Num += omegas[i] * EXP[i] * mu_meta[i] * std::sqrt(sigma2_meta[i] / vars[i]);
+    }
+
+    // Multiply by lambda
+    Num *= lambda;
+
+    // Compute EXP2
+    double EXP2 = std::exp(-0.5 * (mu_meta[max_ind] * mu_meta[max_ind] / sigma2_meta[max_ind]));
+
+    // Compute Den
+    double sum_term = 0.0;
+    for (size_t i = 0; i < omegas.size(); ++i) {
+    sum_term += omegas[i] * EXP[i] * std::sqrt(sigma2_meta[i] / vars[i]);
+    }
+
+    // Compute Den
+    double Den = (1 - lambda) * EXP2 + lambda * sum_term;
+
+    double DerNum_sum = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        double term = omegas[i] * EXP[i] * (mu_meta[i] * mu_meta[i] + sigma2_meta[i]) *
+                      a[rank] * gam1s[rank] * std::sqrt(sigma2_meta[i] / sigmas[i]);
+        DerNum_sum += term;
+    }
+
+    // Multiply by lambda
+    double DerNum = lam * sum;
+
+    return Num / Den;
+}
 
 double vamp::g1(double y, double gam1) { //fchecked
     
