@@ -287,7 +287,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
             // new signal estimate
             for (int i = 0; i < M; i++)
-                x1_hat[i] = g1(r1[i], gam1);
+                x1_hat[i] = g1_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale); // x1_hat[i] = g1(r1[i], gam1);
+
 
             if (it==1 && init_est==1)
                 x1_hat = r1;
@@ -301,7 +302,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
             double sum_d = 0;
             for (int i=0; i<M; i++)
             {
-                x1_hat_d[i] = g1d(r1[i], gam1);
+                // x1_hat_d[i] = g1d(r1[i], gam1);
+                x1_hat_d[i] = g1d_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale);
                 if (!use_freeze || (use_freeze && freeze_ind[i]==0))
                     sum_d += x1_hat_d[i];
             }
@@ -768,8 +770,8 @@ double vamp::g1_transfer(double r1,
 
     double lambda = 1 - probs[0];
 
-    std::vector<double> variances(vars.begin() + 1, vars.end())
-    std::vector<double> omegas(probs.begin() + 1, probs.end())
+    std::vector<double> variances(vars.begin() + 1, vars.end());
+    std::vector<double> omegas(probs.begin() + 1, probs.end());
     for (int j = 0; j < omegas.size(); j++) // omegas and variances are of length L
         omegas[j] /= lambda;
 
@@ -831,8 +833,8 @@ double vamp::g1d_transfer(double r1,
 
     double lambda = 1 - probs[0];
 
-    std::vector<double> variances(vars.begin() + 1, vars.end())
-    std::vector<double> omegas(probs.begin() + 1, probs.end())
+    std::vector<double> variances(vars.begin() + 1, vars.end());
+    std::vector<double> omegas(probs.begin() + 1, probs.end());
     for (int j = 0; j < omegas.size(); j++) // omegas and variances are of length L
         omegas[j] /= lambda;
 
@@ -886,14 +888,14 @@ double vamp::g1d_transfer(double r1,
     // Compute DerNum
     double DerNum = 0.0;
     for (size_t i = 0; i < omegas.size(); ++i) {
-        DerNum += omegas[i] * EXP[i] * (mu_meta[i] * mu_meta[i] + sigma2_meta[i]) * a_scale * gam1 * std::sqrt(sigma2_meta[i] / sigmas[i]);
+        DerNum += omegas[i] * EXP[i] * (mu_meta[i] * mu_meta[i] + sigma2_meta[i]) * a_scale * gam1 * std::sqrt(sigma2_meta[i] / variances[i]);
     }
     DerNum *= lambda;
 
     // Compute DerDen
     double DerDen = 0.0;
     for (size_t i = 0; i < omegas.size(); ++i) {
-        DerDen += omegas[i] * mu_meta[i] * EXP[i] * a_scale * gam1 * std::sqrt(sigma2_meta[i] / sigmas[i]);
+        DerDen += omegas[i] * mu_meta[i] * EXP[i] * a_scale * gam1 * std::sqrt(sigma2_meta[i] / variances[i]);
     }
     DerDen *= lambda;
 
