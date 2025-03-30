@@ -255,6 +255,15 @@ std::vector<double> vamp::infere_linear(data* dataset){
             r1_add_info = mpi_read_vec_from_file(r1_add_info_file, M, (*dataset).get_S());
         else
             r1_add_info = read_vec_from_file(r1_add_info_file, M, (*dataset).get_S());
+        for (int i = 0; i < M; i++)
+            r1_add_info[i] *= sqrt( (double) N );
+        gam1_add_info /= (double) N;
+
+        if (rank == 0){
+            std::cout << "gam1_add_info = " << gam1_add_info << "\n";
+            std::cout << "r1_add_info[0] = " << r1_add_info[0] << "\n";
+            std::cout << "a_scale = " << a_scale << "\n";
+        }
     }
 
     // starting VAMP iterations
@@ -286,9 +295,14 @@ std::vector<double> vamp::infere_linear(data* dataset){
         for (; it_revar <= auto_var_max_iter; it_revar++){
 
             // new signal estimate
-            for (int i = 0; i < M; i++)
+            // if (rank == 0)
+                // std::cout << "rank = " << rank <<  ", before denoiser \n";
+            for (int i = 0; i < M; i++){
                 x1_hat[i] = g1_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale); // x1_hat[i] = g1(r1[i], gam1);
-
+                // break;
+            }
+            // if (rank == 0)
+            //     std::cout << "rank = 0, after denoiser, x1_hat[0] = " << x1_hat[0] << ", x1_hat[11] = " << x1_hat[11] << "\n";
 
             if (it==1 && init_est==1)
                 x1_hat = r1;
@@ -311,6 +325,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
             alpha1 = 0;
             MPI_Allreduce(&sum_d, &alpha1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
             alpha1 /= Mt;
+            if (rank == 0)
+                std::cout << "alpha1 = " << alpha1 << "\n";
             eta1 = gam1 / alpha1;
 
             if (it <= 1)
@@ -799,8 +815,8 @@ double vamp::g1_transfer(double r1,
 
     std::transform(mu_meta.begin(), mu_meta.end(), sigma2_meta.begin(), EXP.begin(),
                    [max_mu_sq, max_ind, &sigma2_meta](double mu, double sigma) {
-                       return std::exp(0.5 * ((mu * mu * sigma2_meta[max_ind] - max_mu_sq * sigma) /
-                                              (sigma * sigma2_meta[max_ind])));
+                       return std::exp(0.5 * ( (mu * mu * sigma2_meta[max_ind] - max_mu_sq * sigma) /
+                                              (sigma * sigma2_meta[max_ind]) ));
                    });
 
     double Num = 0.0;
@@ -816,8 +832,16 @@ double vamp::g1_transfer(double r1,
 
     // Compute Den
     double sum_term = 0.0;
-    for (size_t i = 0; i < omegas.size(); ++i) 
-        sum_term += omegas[i] * EXP[i] * std::sqrt(sigma2_meta[i] / vars[i]);
+    for (size_t i = 0; i < omegas.size(); ++i) {
+        sum_term += omegas[i] * EXP[i] * std::sqrt(sigma2_meta[i] / variances[i]);
+        // std::cout << "std::sqrt(sigma2_meta[i] / vars[i]) = " << std::sqrt(sigma2_meta[i] / vars[i]) << std::endl;
+        // std::cout << "EXP[i] = " << EXP[i] << std::endl;
+        // std::cout << "omegas[i] = " << omegas[i] << std::endl;
+    }
+    
+    // std::cout << "sum_term = " << sum_term << std::endl;
+    // std::cout << "EXP2 = " << EXP2 << std::endl;
+    // std::cout << "lambda = " << lambda << std::endl;
 
     // Compute Den
     double Den = (1 - lambda) * EXP2 + lambda * sum_term;
@@ -874,16 +898,20 @@ double vamp::g1d_transfer(double r1,
     // Multiply by lambda
     Num *= lambda;
 
+    // std::cout << "Num = " << Num << "\n";
+
     // Compute EXP2
     double EXP2 = std::exp(-0.5 * (mu_meta[max_ind] * mu_meta[max_ind] / sigma2_meta[max_ind]));
 
     // Compute Den
     double sum_term = 0.0;
     for (size_t i = 0; i < omegas.size(); ++i) 
-        sum_term += omegas[i] * EXP[i] * std::sqrt(sigma2_meta[i] / vars[i]);
+        sum_term += omegas[i] * EXP[i] * std::sqrt(sigma2_meta[i] / variances[i]);
 
     // Compute Den
     double Den = (1 - lambda) * EXP2 + lambda * sum_term;
+
+    // std::cout << "Den = " << Den << "\n";
 
     // Compute DerNum
     double DerNum = 0.0;
@@ -892,6 +920,8 @@ double vamp::g1d_transfer(double r1,
     }
     DerNum *= lambda;
 
+    // std::cout << "DerNum = " << DerNum << "\n";
+
     // Compute DerDen
     double DerDen = 0.0;
     for (size_t i = 0; i < omegas.size(); ++i) {
@@ -899,8 +929,14 @@ double vamp::g1d_transfer(double r1,
     }
     DerDen *= lambda;
 
+    // std::cout << "DerDen = " << DerDen << "\n";
+
     // Compute final result
     double result = (DerNum * Den - DerDen * Num) / (Den * Den);
+
+    // std::cout << "result = " << result << "\n";
+
+    return result;
 
 }
 

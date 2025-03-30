@@ -50,7 +50,7 @@ void Options::read_command_line_options(int argc, char** argv) {
         else if (!strcmp(argv[i], "--r1-add-info-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
             r1_add_info_file = argv[++i];
-            ss << "---r1-add-info-file " << r1_add_info_file << "\n";
+            ss << "--r1-add-info-file " << r1_add_info_file << "\n";
         }
         else if (!strcmp(argv[i], "--freeze-index-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
