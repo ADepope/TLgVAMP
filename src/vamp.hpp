@@ -48,6 +48,7 @@ private:
     std::string model;
     std::string out_dir;
     std::string out_name;
+    std::string scheduler;
     std::vector<double> bern_vec;
     std::vector<double> invQ_bern_vec;
 

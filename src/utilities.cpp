@@ -41,8 +41,7 @@ int check_int_overflow(const size_t n, const int linenumber, const char* filenam
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     return static_cast<int>(n);
-}
-
+}   
 
 // sampling from a mixture of gaussians
 double generate_mixture_gaussians(int K_grp, std::vector<double> eta, std::vector<double> pi, long unsigned int seed)

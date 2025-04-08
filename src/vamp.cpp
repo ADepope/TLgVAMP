@@ -57,6 +57,7 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     redglob(opt.get_redglob()),
     rank(rank),
     r1_add_info_file(opt.get_r1_add_info_file()),
+    scheduler(opt.get_scheduler()),
     gam1_add_info(opt.get_gam1_add_info()),
     a_scale(opt.get_a_scale()) {
     x1_hat = std::vector<double> (M, 0.0);
@@ -115,6 +116,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     rank(rank),
     reverse(opt.get_use_XXT_denoiser()),
     use_lmmse_damp(opt.get_use_lmmse_damp()),
+    scheduler(opt.get_scheduler()),
     r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()),
     a_scale(opt.get_a_scale())  {
@@ -202,6 +204,53 @@ std::vector<double> vamp::infere_linear(data* dataset){
         redglob = 1;
         Nold = N;
         N = 4*SB_cross;
+    }
+
+    // parsing scheduler
+    double sch_begin, sch_step_size, sch_first, sch_second;
+    int sch_begin_it, sch_num_steps;
+    std::string scheduler_mode;
+    if (scheduler != "")
+    {
+        std::vector<std::string> scheduler_parts;
+        std::stringstream ss(scheduler);
+        std::string item;
+
+        // Split by "::"
+        while (std::getline(ss, item, ':')) {
+            if (!item.empty() && item.back() == ':') item.pop_back(); // handle "::"
+            scheduler_parts.push_back(item);
+        }
+
+        if (scheduler_parts.size() < 2) {
+            std::cerr << "Invalid input format.\n";
+        }
+
+        scheduler_mode  = scheduler_parts[0];
+
+        if (scheduler_mode == "linear" && scheduler_parts.size() == 4) {
+            sch_begin = std::stod(scheduler_parts[1]);
+            sch_num_steps = std::stoi(scheduler_parts[2]);
+            sch_step_size = std::stod(scheduler_parts[3]);
+
+            std::cout << "Mode: Linear\n";
+            std::cout << "Begin: " << sch_begin << "\n";
+            std::cout << "Num Steps: " << sch_num_steps << "\n";
+            std::cout << "Step Size: " << sch_step_size << "\n";
+        }
+        else if (scheduler_mode == "two-step" && scheduler_parts.size() == 4) {
+            sch_first = std::stod(scheduler_parts[1]);
+            sch_second = std::stod(scheduler_parts[2]);
+            sch_begin_it = std::stod(scheduler_parts[3]);
+
+            std::cout << "Mode: Two-step\n";
+            std::cout << "First Scale: " << sch_first << "\n";
+            std::cout << "Second Scale: " << sch_second << "\n";
+            std::cout << "Begin it: " << sch_begin_it << "\n";
+        }
+        else {
+            std::cerr << "Invalid input format or parameters.\n";
+        }
     }
 
     // loading freeze index file
@@ -298,7 +347,10 @@ std::vector<double> vamp::infere_linear(data* dataset){
             // if (rank == 0)
                 // std::cout << "rank = " << rank <<  ", before denoiser \n";
             for (int i = 0; i < M; i++){
-                x1_hat[i] = g1_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale); // x1_hat[i] = g1(r1[i], gam1);
+                if (r1_add_info_file != "")
+                    x1_hat[i] = g1_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale);
+                else
+                    x1_hat[i] = g1(r1[i], gam1);
                 // break;
             }
             // if (rank == 0)
@@ -316,8 +368,10 @@ std::vector<double> vamp::infere_linear(data* dataset){
             double sum_d = 0;
             for (int i=0; i<M; i++)
             {
-                // x1_hat_d[i] = g1d(r1[i], gam1);
-                x1_hat_d[i] = g1d_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale);
+                if (r1_add_info_file != "")
+                    x1_hat_d[i] = g1d_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale);
+                else 
+                    x1_hat_d[i] = g1d(r1[i], gam1);
                 if (!use_freeze || (use_freeze && freeze_ind[i]==0))
                     sum_d += x1_hat_d[i];
             }
@@ -325,8 +379,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
             alpha1 = 0;
             MPI_Allreduce(&sum_d, &alpha1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
             alpha1 /= Mt;
-            if (rank == 0)
-                std::cout << "alpha1 = " << alpha1 << "\n";
+            // if (rank == 0)
+            //     std::cout << "alpha1 = " << alpha1 << "\n";
             eta1 = gam1 / alpha1;
 
             if (it <= 1)

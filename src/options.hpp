@@ -26,6 +26,7 @@ public:
     std::string get_out_name() const { return out_name; }
     std::string get_model() const { return model; }
     std::string get_run_mode() const { return run_mode; }
+    std::string get_scheduler() const { return scheduler; }
 
     double get_stop_criteria_thr() const { return stop_criteria_thr; }
     double get_EM_err_thr() const { return EM_err_thr; }
@@ -33,7 +34,6 @@ public:
     double get_probit_var() const { return probit_var; }
     double get_a_scale() const { return a_scale; }
     
-
     unsigned int get_EM_max_iter() const { return EM_max_iter; }
     unsigned int get_CG_max_iter() const { return CG_max_iter; }
     unsigned int get_Mt()  const { return Mt; }
@@ -89,6 +89,7 @@ private:
     std::string out_dir = "";
     std::string out_name = "";
     std::string model = "linear";
+    std::string scheduler= "";
 
     double stop_criteria_thr = 1e-4;
     double EM_err_thr = 1e-2;

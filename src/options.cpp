@@ -47,6 +47,11 @@ void Options::read_command_line_options(int argc, char** argv) {
             estimate_file = argv[++i];
             ss << "--estimate-file " << estimate_file << "\n";
         }
+        else if (!strcmp(argv[i], "--scheduler")) {
+            if (i == argc - 1) fail_if_last(argv, i);
+            scheduler = argv[++i];
+            ss << "--scheduler " << scheduler << "\n";
+        }
         else if (!strcmp(argv[i], "--r1-add-info-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
             r1_add_info_file = argv[++i];
