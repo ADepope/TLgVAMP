@@ -59,6 +59,7 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     r1_add_info_file(opt.get_r1_add_info_file()),
     scheduler(opt.get_scheduler()),
     gam1_add_info(opt.get_gam1_add_info()),
+    a_scale_start_iter(opt.get_a_scale_start_iter()),
     a_scale(opt.get_a_scale()) {
     x1_hat = std::vector<double> (M, 0.0);
     x2_hat = std::vector<double> (M, 0.0);
@@ -119,6 +120,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     scheduler(opt.get_scheduler()),
     r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()),
+    a_scale_start_iter(opt.get_a_scale_start_iter()),
     a_scale(opt.get_a_scale())  {
     N = opt.get_N();
     Mt = opt.get_Mt();
@@ -347,7 +349,7 @@ std::vector<double> vamp::infere_linear(data* dataset){
             // if (rank == 0)
                 // std::cout << "rank = " << rank <<  ", before denoiser \n";
             for (int i = 0; i < M; i++){
-                if (r1_add_info_file != "")
+                if (r1_add_info_file != "" && a_scale_start_iter <= it)
                     x1_hat[i] = g1_transfer(r1[i], gam1, r1_add_info[i], gam1_add_info, a_scale);
                 else
                     x1_hat[i] = g1(r1[i], gam1);

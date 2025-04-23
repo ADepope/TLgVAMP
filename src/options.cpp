@@ -192,6 +192,15 @@ void Options::read_command_line_options(int argc, char** argv) {
             learn_vars = (unsigned int) atoi(argv[++i]);
             ss << "--learn-vars " << learn_vars << "\n";
         }
+        else if (!strcmp(argv[i], "--a-scale-start-iter")) {
+            if (i == argc - 1) fail_if_last(argv, i);
+            if (atoi(argv[i + 1]) < 0) {
+                std::cout << "FATAL  : option --a-scale-start-iter has to be a non-negative integer! (" << argv[i + 1] << " was passed)" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            a_scale_start_iter = (unsigned int) atoi(argv[++i]);
+            ss << "--a-scale-start-iter " << a_scale_start_iter << "\n";
+        }
         else if (!strcmp(argv[i], "--use-XXT-denoiser")) {
             if (i == argc - 1) fail_if_last(argv, i);
             if (atoi(argv[i + 1]) < 0) {

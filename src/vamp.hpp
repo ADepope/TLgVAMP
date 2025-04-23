@@ -40,6 +40,7 @@ private:
     int learn_vars;
     int init_est;
     long unsigned int seed;
+    unsigned int a_scale_start_iter;
     double damp_max = 1;
     double damp_min = 0.05;
     double stop_criteria_thr; // = 1e-5;
