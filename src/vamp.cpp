@@ -553,6 +553,12 @@ std::vector<double> vamp::infere_linear(data* dataset){
         for (int i = 0; i < M; i++)
             r2[i] = (eta1 * x1_hat[i] - gam1 * r1[i]) / gam2;
 
+        if (rank == 0){
+            std::cout << "r2[0] = " << r2[0] << "\n";
+            std::cout << "r2[1] = " << r2[1] << "\n";
+            std::cout << "r2[2] = " << r2[2] << "\n";
+        }
+
         if (use_lmmse_damp == 1){
             //double xi = std::min(2 * std::min(alpha1, alpha2), 1.0);
             //if (rank == 0)
@@ -631,13 +637,22 @@ std::vector<double> vamp::infere_linear(data* dataset){
             else
                 v = (*dataset).ATx(y.data());
 
+            if (rank == 0)
+                std::cout << "before lin comb v[0] = " << v[0] << "\n";
+
             for (int i = 0; i < M; i++)
                 v[i] = gamw * v[i] + gam2 * r2[i];
+            
+            if (rank == 0)
+                std::cout << "v[0] = " << v[0] << "\n";
 
             if (it == 1)
                 x2_hat = precondCG_solver(v, std::vector<double>(M, 0.0), gamw, 1, dataset, redglob); // precond_change!
             else
                 x2_hat = precondCG_solver(v, mu_CG_last, gamw, 1, dataset, redglob); // precond_change!
+
+            if (rank == 0)
+                std::cout << "x2_hat[0] = " << x2_hat[0] << "\n";
 
         } 
         else if (reverse == 1){
