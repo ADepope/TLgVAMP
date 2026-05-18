@@ -406,3 +406,37 @@ double erfcx (double x)
     }
     return r;
 }
+
+std::vector<double> read_maf_from_frq(std::string filepath, int M, int S) {
+    std::vector<double> mafs;
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open MAF file: " + filepath);
+    }
+
+    std::string line;
+    // 1. Skip the header line
+    std::getline(file, line);
+
+    // 2. Skip the first S SNPs (rows) to get to this rank's data
+    for (int i = 0; i < S; ++i) {
+        if (!std::getline(file, line)) break;
+    }
+
+    // 3. Read exactly M SNPs for this rank
+    std::string chr, snp, a1, a2;
+    double maf;
+    int nchrobs;
+
+    for (int i = 0; i < M; ++i) {
+        if (file >> chr >> snp >> a1 >> a2 >> maf >> nchrobs) {
+            mafs.push_back(maf);
+        } else {
+            // If the file ends early, fill with 0.0 or handle error
+            mafs.push_back(0.0);
+        }
+    }
+
+    file.close();
+    return mafs;
+}

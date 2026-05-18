@@ -59,6 +59,11 @@ public:
     double get_gam1_add_info() const { return gam1_add_info; }
     double get_gamma_damp() const { return gamma_damp; }
     
+    unsigned int get_use_tl_lmmse() const { return use_tl_lmmse; }
+    double       get_gamma_tl()     const { return gamma_tl; }
+    std::string  get_r_tl_file()    const { return r_tl_file; }
+    std::string get_maf_pop1_file() const { return maf_pop1_file; }
+    std::string get_maf_pop2_file() const { return maf_pop2_file; }
 
     std::vector<double> get_vars() const { return vars; } 
     std::vector<double> get_probs() const { return probs; }
@@ -91,6 +96,8 @@ private:
     std::string out_name = "";
     std::string model = "linear";
     std::string scheduler= "";
+    std::string maf_pop1_file = "";
+    std::string maf_pop2_file = "";
 
     double stop_criteria_thr = 1e-4;
     double EM_err_thr = 1e-2;
@@ -132,6 +139,10 @@ private:
     std::vector<std::string> phen_files;
     std::vector<std::string> phen_files_test;
     std::vector<std::string> true_signal_files;
+
+    unsigned int use_tl_lmmse = 0;   // 0 = classic VAMP  , 1 = TL–LMMSE
+    double       gamma_tl     = 0.;  // γ_TL
+    std::string  r_tl_file    = "";  // path to β_TL
 
     void check_options();
 };

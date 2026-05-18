@@ -74,6 +74,19 @@ private:
     std::string freeze_index_file;
     std::string r1_add_info_file;
 
+    int            use_tl_lmmse = 0;   // 0 = classic, 1 = TL version
+    double         gamma_tl = 0;       // γ_TL
+    std::vector<double> r_tl;      // β_TL  (size M)
+    std::string r_tl_file;
+
+    std::string maf_pop1_file;
+    std::string maf_pop2_file;
+    std::vector<double> maf_pop1;
+    std::vector<double> maf_pop2;
+    std::vector<double> gamma_tl_vec;
+    bool use_maf_tl = true;
+    double gamma_hyper = 200.0; 
+
 public:
 
     //******************
@@ -153,5 +166,18 @@ public:
     void set_LBglob(int LB) { LBglob = LB; }
     void set_gam2 (double gam) { gam2 = gam; }
     std::vector<double> get_cov_eff() const {return cov_eff;}
+
+    /* ======== TL-LMMSE helper functions ======================== */
+    std::vector<double> precondCG_TL(const std::vector<double>& b,
+                                     double                     gamw,
+                                     double                     gam2_eff,
+                                     const std::vector<double>& mu0,
+                                     data*                      dataset,
+                                     int                        red);
+
+    double g2d_onsager_TL(double gam2_orig,
+                          double gam2_eff,
+                          double gamw,
+                          data*  dataset);
     
    };

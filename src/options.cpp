@@ -67,10 +67,39 @@ void Options::read_command_line_options(int argc, char** argv) {
             cov_estimate_file = argv[++i];
             ss << "--cov-estimate-file " << cov_estimate_file << "\n";
         }
+        else if (!strcmp(argv[i], "--use-tl-lmmse")) {
+            if (i == argc - 1) fail_if_last(argv,i);
+            if (atoi(argv[i+1]) < 0) {
+                std::cout << "FATAL  : option --use-tl-lmmse must be 0/1!\n";
+                exit(EXIT_FAILURE);
+            }
+            use_tl_lmmse = (unsigned int) atoi(argv[++i]);
+            ss << "--use-tl-lmmse " << use_tl_lmmse << "\n";
+        }
+        else if (!strcmp(argv[i], "--gamma-tl")) {
+            if (i == argc - 1) fail_if_last(argv,i);
+            gamma_tl = atof(argv[++i]);
+            ss << "--gamma-tl " << gamma_tl << "\n";
+        }
+        else if (!strcmp(argv[i], "--r-tl-file")) {
+            if (i == argc - 1) fail_if_last(argv,i);
+            r_tl_file = argv[++i];
+            ss << "--r-tl-file " << r_tl_file << "\n";
+        }
         else if (!strcmp(argv[i], "--run-mode")) {
             if (i == argc - 1) fail_if_last(argv, i);
             run_mode = argv[++i];
             ss << "--run-mode " << run_mode << "\n";
+        }
+        else if (!strcmp(argv[i], "--maf-pop1-file")) {
+            if (i == argc - 1) fail_if_last(argv, i);
+            maf_pop1_file = argv[++i];
+            ss << "--maf-pop1-file " << maf_pop1_file << "\n";
+        }
+        else if (!strcmp(argv[i], "--maf-pop2-file")) {
+            if (i == argc - 1) fail_if_last(argv, i);
+            maf_pop2_file = argv[++i];
+            ss << "--maf-pop2-file " << maf_pop2_file << "\n";
         }
         // List of phenotype files to read; comma separated if more than one.
         else if (!strcmp(argv[i], "--phen-files")) {

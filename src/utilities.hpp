@@ -50,6 +50,8 @@ double erfcx (double x);
 
 int sgn(double val);
 
+std::vector<double> read_maf_from_frq(std::string filepath, int M, int S);
+
 //EO: this to allow reduction on avx256 pd4 datatype with OpenMP
 #ifdef _OPENMP
 #pragma omp declare reduction \
