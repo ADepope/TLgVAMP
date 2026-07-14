@@ -4,6 +4,7 @@
 #include <bits/stdc++.h>  // contains definition of INT_MAX
 #include <immintrin.h> // contains definition of _mm_malloc
 #include <numeric>
+
 #include "utilities.hpp"
 #include "data.hpp"
 #include "vamp.hpp"
@@ -44,19 +45,12 @@ int main(int argc, char** argv)
         int M = MS[0];
         int S = MS[1];
         int Mm = MS[2];
-
-        // reading signal estimate from gmrm software
-        //const std::string true_beta_height = "/nfs/scistore13/robingrp/human_data/adepope_preprocessing/VAMPJune2022/height_true.txt";
-        //std::vector<double> beta_true = read_vec_from_file(true_beta_height, M, S); //for smaller dataset
         
         std::string phenfp = (opt.get_phen_files())[0];
         std::string type_data = "bed";
         double alpha_scale = opt.get_alpha_scale();
         std::string bimfp = opt.get_bim_file();
         data dataset(phenfp, opt.get_bed_file(), opt.get_N(), M, opt.get_Mt(), S, rank, type_data, alpha_scale, bimfp);
-        // dataset.read_phen();
-        // dataset.read_genotype_data();
-        // dataset.compute_markers_statistics();
         
 
         //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -70,58 +64,10 @@ int main(int argc, char** argv)
             gamw = 2;
         else 
             gamw = 1.0 / (1.0 - opt.get_h2());
-        // gamw = 1.0 / (1.0 - 0.57);
         
         std::vector<double> beta_true = std::vector<double> (M, 0.0);
         vamp emvamp(M, gam1, gamw, beta_true, rank, opt);
 
-        /*
-        std::vector<double> vec(M, 1.0);
-        emvamp.set_LBglob((N/4)*4/5);
-        emvamp.set_LBglob((N/4)/10);
-        emvamp.set_SBglob(0);
-
-        std::vector<double> lm1 =  emvamp.lmmse_mult(vec, 1, &dataset, 0);
-        std::vector<double> lm2 =  emvamp.lmmse_mult(vec, 1, &dataset, 1);
-
-        double std1 = calc_stdev(lm1,1);
-        double std2 = calc_stdev(lm2,1);
-
-        if (rank == 0)
-            std::cout << "std1 = " << std1 << ", std2 = " << std2 << std::endl;
-        
-        std::vector<double> diff = lm1;
-        for (int i=0; i<M; i++)
-            diff[i] -= lm2[i];
-        
-        double l2norm2_diff = l2_norm2(diff, 1);
-        double l2norm2_true = l2_norm2(lm1, 1);
-
-        if (rank == 0)
-            std::cout << "sqrt( l2norm2_diff / l2norm2_true ) = " << sqrt( l2norm2_diff / l2norm2_true ) << std::endl; 
-
-        std::vector<double> xhat = emvamp.precondCG_solver(vec, std::vector<double>(M, 0.0), 2, 1, &dataset, 0);
-
-        std::vector<double> xhat_red = emvamp.precondCG_solver(vec, std::vector<double>(M, 0.0), 2, 1, &dataset, 1);
-
-        double stdx = calc_stdev(xhat,1);
-        double stdx_red = calc_stdev(xhat_red,1);
-
-        if (rank == 0)
-            std::cout << "stdx = " << stdx << ", stdx_red = " << stdx_red << std::endl;
-
-        
-        std::vector<double> diff_x = xhat;
-        for (int i=0; i<M; i++)
-            diff_x[i] -= xhat_red[i];
-
-        double l2norm2_diff_x = l2_norm2(diff_x, 1);
-        double l2norm2_true_x = l2_norm2(xhat, 1);
-
-        if (rank == 0)
-            std::cout << "sqrt( l2norm2_diff_x / l2norm2_true_x ) = " << sqrt( l2norm2_diff_x / l2norm2_true_x ) << std::endl; 
-
-        */
 
         std::vector<double> x_est = emvamp.infere(&dataset);
 
@@ -143,18 +89,12 @@ int main(int argc, char** argv)
         std::string bimfp = opt.get_bim_file();
 
         data dataset_test(pheno_test, bedfp_test, N_test, M_test, Mt_test, S_test, rank, type_data, alpha_scale, bimfp);
-        // dataset_test.read_phen();
-        // dataset_test.read_genotype_data();
-        // dataset_test.compute_markers_statistics();
         
         std::vector<double> y_test = dataset_test.get_phen();
 
-        //std::vector<double> x_est = read_vec_from_file(opt.get_estimate_file() + "_rank_" + std::to_string(rank) + ".bin", M, 0);
         std::string est_file_name = opt.get_estimate_file();
         int pos_dot = est_file_name.find(".");
         std::string end_est_file_name = est_file_name.substr(pos_dot + 1);
-        //if (rank == 0)
-        //    std::cout << "est_file_name = " << est_file_name << std::endl;
 
         int pos_it = est_file_name.rfind("it");
         std::vector<int> iter_range = opt.get_test_iter_range();
@@ -191,9 +131,6 @@ int main(int argc, char** argv)
                 double stdev = calc_stdev(y_test);
                 double R2 = 1 - l2_pred_err2 / ( stdev * stdev * y_test.size() );
                 if (rank == 0){
-                    //std::cout << "y stdev^2 = " << stdev * stdev << std::endl;  
-                    //std::cout << "test l2 pred err^2 = " << l2_pred_err2 << std::endl;
-                    // std::cout << "test R2 = " << 1 - l2_pred_err2 / ( stdev * stdev * y_test.size() ) << std::endl;
                     std::cout <<  R2 << ", ";
                 }
 
@@ -227,10 +164,6 @@ int main(int argc, char** argv)
             double l2_pred_err2 = 0;
             for (int i0 = 0; i0 < N_test; i0++){
                 l2_pred_err2 += (y_test[i0] - z_test[i0]) * (y_test[i0] - z_test[i0]);
-                //if ( std::isinf(l2_pred_err2) == 1 || i0 <= 4)
-                //    std::cout << "y_test[" << i0 << "] = " << y_test[i0] << ", z_test[i0] = " << z_test[i0] << std::endl;
-                //if (i0 % 1000 == 0)
-                //    std::cout << "l2_pred_err2 = " << l2_pred_err2 << std::endl;
             }  
 
             double stdev = calc_stdev(y_test);
@@ -256,9 +189,6 @@ int main(int argc, char** argv)
         int M = MS[0];
         int S = MS[1];
         int Mm = MS[2];
-
-        //const std::string true_beta_height = "/nfs/scistore13/robingrp/human_data/adepope_preprocessing/VAMPJune2022/height_true.txt";
-        //std::vector<double> beta_true = read_vec_from_file(true_beta_height, M, S);
   
         std::vector<double> beta_true = std::vector<double> (M, 0.0);
         std::string phenfp = (opt.get_phen_files())[0]; // currently only one phenotype file is supported
@@ -266,9 +196,6 @@ int main(int argc, char** argv)
         double alpha_scale = opt.get_alpha_scale();
         std::string bimfp = opt.get_bim_file();
         data dataset(phenfp, opt.get_bed_file(), opt.get_N(), M, opt.get_Mt(), S, rank, type_data, alpha_scale, bimfp);
-        // dataset.read_phen();
-        // dataset.read_genotype_data();
-        // dataset.compute_markers_statistics();
 
         double gam1 = 1e-6; 
         double gamw;
@@ -301,9 +228,6 @@ int main(int argc, char** argv)
         int S_test = MS_test[1];
 
         data dataset_test(pheno_test, bedfp_test, N_test, M_test, Mt_test, S, rank, type_data, alpha_scale, bimfp);
-        // dataset_test.read_phen();
-        // dataset_test.read_genotype_data();
-        // dataset_test.compute_markers_statistics();
 
         for (int i0 = 0; i0 < x_est.size(); i0++)
             x_est[i0] *= sqrt( (double) N_test );
@@ -501,7 +425,6 @@ int main(int argc, char** argv)
     std::vector<double> phen(N_test, 0.0);
     data dataset_test(phen, bedfp_test, N_test, M_test, Mt_test, S_test, rank, type_data, alpha_scale, bimfp);
 
-    //std::vector<double> x_est = read_vec_from_file(opt.get_estimate_file() + "_rank_" + std::to_string(rank) + ".bin", M, 0);
     std::string est_file_name = opt.get_estimate_file();
     int pos_dot = est_file_name.find(".");
     std::string end_est_file_name = est_file_name.substr(pos_dot + 1);
@@ -521,7 +444,6 @@ int main(int argc, char** argv)
         for (int it = min_it; it <= max_it; it++){
             std::vector<double> x_est;
             std::string est_file_name_it = est_file_name.substr(0, pos_it) + "temp_" + std::to_string(it) + "_" + std::to_string(it) + "_gibbs_est." + end_est_file_name;
-            //std::string est_file_name_it = est_file_name.substr(0, pos_it) + "temp_" + std::to_string(it) + "_" + std::to_string(it) + "." + end_est_file_name;
             if (rank == 0)
                 std::cout << "est_file_name_it = " << est_file_name_it << std::endl;
             if (end_est_file_name == "bin")
@@ -567,12 +489,9 @@ int main(int argc, char** argv)
 
     data dataset_test(y, bedfp_test, N_test, M_test, Mt_test, S_test, rank, type_data, alpha_scale, bimfp);
 
-    //std::vector<double> x_est = read_vec_from_file(opt.get_estimate_file() + "_rank_" + std::to_string(rank) + ".bin", M, 0);
     std::string est_file_name = opt.get_estimate_file();
     int pos_dot = est_file_name.find(".");
     std::string end_est_file_name = est_file_name.substr(pos_dot + 1);
-    //if (rank == 0)
-    //    std::cout << "est_file_name = " << est_file_name << std::endl;
 
     std::vector<double> x_est;
     if (end_est_file_name == "bin")

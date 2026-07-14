@@ -12,9 +12,6 @@
 #include "dotp_lut.hpp"
 #include "vamp.hpp"
 #include "data.hpp"
-#include "vamp_probit.cpp"
-#include "vamp_Huber.cpp"
-#include "denoiserXXT.cpp"
 #include "utilities.hpp"
 #include <boost/math/distributions/students_t.hpp>
 #include <stdexcept>
@@ -44,7 +41,6 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     EM_max_iter = opt.get_EM_max_iter();
     EM_err_thr = opt.get_EM_err_thr();
     CG_max_iter = opt.get_CG_max_iter();
-    reverse = opt.get_use_XXT_denoiser();
     use_lmmse_damp = opt.get_use_lmmse_damp();
     stop_criteria_thr = opt.get_stop_criteria_thr();
     probit_var = opt.get_probit_var();
@@ -73,7 +69,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     init_est(opt.get_init_est()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), estimate_file(opt.get_estimate_file()),
     store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), rank(rank),
-    reverse(opt.get_use_XXT_denoiser()), use_lmmse_damp(opt.get_use_lmmse_damp()),
+    use_lmmse_damp(opt.get_use_lmmse_damp()),
     scheduler(opt.get_scheduler()), r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
     a_scale(opt.get_a_scale())  
@@ -147,18 +143,11 @@ std::vector<double> vamp::infere( data* dataset ){
         for (int i=0; i<vars.size(); i++)
             vars[i] *= (double) (4*SB_cross) / (double) N;
     }
-
-    if (reverse == 1)
-        (*dataset).compute_people_statistics();
     
-    if (!strcmp(model.c_str(), "linear"))
+    if (model == "linear")
         return infere_linear(dataset);
-    else if (!strcmp(model.c_str(), "bin_class"))
-        return infere_bin_class(dataset);
-    else if (!strcmp(model.c_str(), "robust"))
-        return infere_robust(dataset);
     else
-        throw "invalid model specification!";
+        throw std::runtime_error("invalid model specification: only 'linear' is enabled"); 
 
     return std::vector<double> (M, 0.0);
 }
@@ -303,7 +292,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
             if (it==1 && init_est==1)
                 x1_hat = r1;
 
-            // Add this print statement:
             if (rank == 0) {
                 std::cout << "[DEBUG] Iteration " << it 
                         << ": x1_hat[1] = " << x1_hat[1] 
@@ -500,52 +488,40 @@ std::vector<double> vamp::infere_linear(data* dataset){
         double start_CG = MPI_Wtime();    
 
         /* ============================================================
-        LMMSE via CG (reverse == 0) – Unified TL (Global or MAF-aware)
+        LMMSE via CG – Unified TL (Global or MAF-aware)
         ============================================================ */
-        if (reverse == 0)
-        {
-            if (use_tl_lmmse) {
-                if (gamma_tl_vec.size() != M) gamma_tl_vec.resize(M, 0.0);
-                
-                for (int i = 0; i < M; i++) {
-                    if (use_maf_tl && !maf_pop1.empty() && !maf_pop2.empty()) {
-                        double maf_diff = maf_pop1[i] - maf_pop2[i];
-                        double w_i = std::exp(-gamma_hyper * (maf_diff * maf_diff));
-                        gamma_tl_vec[i] = gamma_tl * w_i;
-                    } 
-                    else {
-                        gamma_tl_vec[i] = gamma_tl; 
-                    }
+        if (use_tl_lmmse) {
+            if (gamma_tl_vec.size() != M) gamma_tl_vec.resize(M, 0.0);
+            
+            for (int i = 0; i < M; i++) {
+                if (use_maf_tl && !maf_pop1.empty() && !maf_pop2.empty()) {
+                    double maf_diff = maf_pop1[i] - maf_pop2[i];
+                    double w_i = std::exp(-gamma_hyper * (maf_diff * maf_diff));
+                    gamma_tl_vec[i] = gamma_tl * w_i;
+                } 
+                else {
+                    gamma_tl_vec[i] = gamma_tl; 
                 }
             }
-
-            std::vector<double> b;
-            if (use_cross_val == 1)
-                b = dataset->ATx(y.data(), SBglob, LBglob);
-            else
-                b = dataset->ATx(y.data());
-
-            for (int i = 0; i < M; ++i)
-            {
-                b[i] = gamw * b[i] + gam2 * r2[i];
-                if (use_tl_lmmse)            
-                    b[i] += gamma_tl_vec[i] * r_tl[i];
-            }
-
-            x2_hat = precondCG_solver(
-                        b,
-                        (it == 1 ? std::vector<double>(M,0.0) : mu_CG_last),
-                        gamw, 1, dataset, redglob );
         }
-        /* ============================================================
-        XXᵀ-form denoiser (reverse == 1) – unchanged
-        ============================================================ */
-        else if (reverse == 1)
+
+        std::vector<double> b;
+        if (use_cross_val == 1)
+            b = dataset->ATx(y.data(), SBglob, LBglob);
+        else
+            b = dataset->ATx(y.data());
+
+        for (int i = 0; i < M; ++i)
         {
-            if (it == 1)
-                mu_CG_last = std::vector<double>(4*dataset->get_mbytes(), 0.0);
-            x2_hat = lmmse_denoiserAAT(r2, mu_CG_last, dataset);
+            b[i] = gamw * b[i] + gam2 * r2[i];
+            if (use_tl_lmmse)            
+                b[i] += gamma_tl_vec[i] * r_tl[i];
         }
+
+        x2_hat = precondCG_solver(
+                    b,
+                    (it == 1 ? std::vector<double>(M,0.0) : mu_CG_last),
+                    gamw, 1, dataset, redglob );
 
         std::string filepath_out_x2 = out_dir + out_name + "_it_" + std::to_string(it) + "_x2_hat.bin";
         std::vector<double> x2_hat_stored = x2_hat;
@@ -1336,35 +1312,4 @@ void vamp::err_measures(data *dataset, int ind){
     if (rank == 0){
         std::cout << "\ngamw = " << gamw << std::endl;
     }
-}
-
-std::tuple<double, double, double> vamp::state_evo(int ind, double gam_prev, double gam_before, std::vector<double> probs_before, std::vector<double> vars_before, data* dataset){
-
-    double alpha_bar = 0, eta_bar = 0, gam_bar = 0;
-
-    if (ind == 1){
-
-        std::vector<double> sim_beta = simulate(M, vars, probs);
-        std::vector<double> sim_gam_noise = simulate(M, std::vector<double> {1/gam_prev}, std::vector<double> {1});
-        std::vector<double> sim_beta_before = simulate(M, vars_before, probs_before);
-        std::vector<double> sim_gam_noise_before = simulate(M, std::vector<double> {1/gam_before}, std::vector<double> {1});
-
-        std::vector<double> r1_den(M, 0.0);
-        for (int i=0; i<M; i++)
-            r1_den[i] = rho * g1d(sim_beta[i] + sim_gam_noise[i], gam_prev) + (1-rho) * g1d(sim_beta_before[i] + sim_gam_noise_before[i], gam_before);
-
-        double alpha_bar_temp = std::accumulate(r1_den.begin(), r1_den.end(), 0.0);
-        MPI_Allreduce(&alpha_bar_temp, &alpha_bar, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        alpha_bar /= Mt;
-
-        eta_bar = gam_prev / alpha_bar;
-        gam_bar = eta_bar - gam_prev;
-    }
-    else if (ind == 2){
-        alpha_bar = g2d_onsager(gam_prev, gamw, dataset); 
-        eta_bar = gam_prev / alpha_bar;
-        gam_bar = eta_bar - gam_prev;
-    }
-
-    return {alpha_bar, eta_bar, gam_bar};
 }

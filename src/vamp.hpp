@@ -101,9 +101,6 @@ public:
     //**********************
     std::vector<double> infere(data* dataset);
     std::vector<double> infere_linear(data* dataset);
-    std::vector<double> infere_bin_class(data* dataset);
-
-    std::vector<double> infere_robust(data* dataset);
 
     //std::vector<double> predict(std::vector<double> est, data* dataset);
 
@@ -113,16 +110,9 @@ public:
     //********************************************
     double g1(double x, double gam1);
     double g1_transfer(double r1, double gam1, double r1_add, double gam1_add, double a_scale);
-    double g1_bin_class(double p, double tau1, double y, double m_cov);
     double g1d(double x, double gam1);
     double g1d_transfer(double r1, double gam1, double r1_add, double gam1_add, double a_scale);
-    double g1d_bin_class(double p, double tau1, double y, double m_cov);
     double g2d_onsager(double gam2, double tau, data* dataset);
-    double g2d_onsagerAAT(double gam2, double tau, data* dataset);
-
-    double g1_Huber(double p1, double tau1, double deltaH, double y);
-    double g1d_Huber(double p1, double tau1, double deltaH, double y);
-    double g1d_Huber_der(double p1, double tau1, double deltaH, double y);
 
 
     //************************
@@ -130,37 +120,13 @@ public:
     //************************
     void updatePrior(int verbose);
     void updateNoisePrec(data* dataset);
-    void updateNoisePrecAAT(data* dataset);
-
-    double Huber_loss(double z, double deltaH, double y);
-    double E_MC_eval_ind(double p1, double tau1, double deltaH, double y, int num_MC_steps);
-    double E_MC_eval(std::vector<double> p1, double tau1, double deltaH, std::vector<double> y, int num_MC_steps);
-    double M_deltaH_update(std::vector<double> p1, double tau1, double deltaH, std::vector<double> y, int num_MC_steps, std::vector<double> grid);
-    double EM_deltaH(std::vector<double> p1, double tau1, double deltaH, std::vector<double> y, int num_MC_steps, std::vector<double> grid, int num_EM_steps);
 
     std::vector<double> lmmse_mult(std::vector<double> v, double tau, data* dataset, int red = 0);
-    std::vector<double> lmmse_multAAT(std::vector<double> u, double tau, data* dataset);
-    std::vector<double> lmmse_denoiserAAT(std::vector<double> r, std::vector<double> mu_CG_AAT_last, data* dataset);
 
-    std::vector<double> CG_solverAAT(std::vector<double> v, std::vector<double> mu_start, double tau, int save, data* dataset);
     std::vector<double> precondCG_solver(std::vector<double> v, double tau, int denoiser, data* dataset, int red = 0);
     std::vector<double> precondCG_solver(std::vector<double> v, std::vector<double> mu_start, double tau, int denoiser, data* dataset, int red = 0);    
 
     void err_measures(data * dataset, int ind);
-    void probit_err_measures(data *dataset, int sync, std::vector<double> true_signal, std::vector<double> est, std::string var_name);
-    void robust_err_measures(data *dataset, int sync, std::vector<double> true_signal, std::vector<double> est, std::string var_name);
-
-    std::tuple<double, double, double> state_evo(int ind, double gam_prev, double gam_before, std::vector<double> probs_before, std::vector<double> vars_before, data* dataset);
-
-    double probit_var_EM_deriv(double v, std::vector<double> z, std::vector<double> y); 
-    double expe_probit_var_EM_deriv(double v, double eta, std::vector<double> z, std::vector<double> y);
-    double update_probit_var(double v, double eta, std::vector<double> z_hat, std::vector<double> y);
-    std::vector<double> grad_cov(std::vector<double> y, std::vector<double> gg, double probit_var, std::vector< std::vector<double> > Z, std::vector<double> eta);
-    double mlogL_probit(std::vector<double> y, std::vector<double> gg, double probit_var, std::vector< std::vector<double> > Z, std::vector<double> eta);
-    std::vector<double> grad_desc_step_cov(std::vector<double> y, std::vector<double> gg, double probit_var, std::vector< std::vector<double> > Z, std::vector<double> eta, double* grad_norm);
-    std::vector<double> grad_desc_cov(std::vector<double> y, std::vector<double> gg, double probit_var, std::vector< std::vector<double> > Z, std::vector<double> eta);
-    std::vector<double> Newton_method_cov(std::vector<double> y, std::vector<double> gg, std::vector< std::vector<double> > Z, std::vector<double> eta);
-
 
     void set_SBglob(int SB) { SBglob = SB; }
     void set_LBglob(int LB) { LBglob = LB; }

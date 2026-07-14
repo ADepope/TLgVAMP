@@ -8,10 +8,8 @@
 #include <mpi.h>
 #include <boost/algorithm/string/trim.hpp> // -> module load boost 
 #include "options.hpp"
-// #include <filesystem>
 #include <experimental/filesystem>
 
-//namespace fs = std::filesystem;
 namespace fs = std::experimental::filesystem;
 
 // Function to parse command line options
@@ -464,115 +462,4 @@ void Options::check_options() {
         std::cout << "FATAL  : no bed file provided! Please use the --bed-file option." << std::endl;
         exit(EXIT_FAILURE);
     }
-    //std::cout << "  bed file: OK - " << get_bed_file() << "\n";
-
-    /*
-    if (get_dim_file() == "") {
-        std::cout << "FATAL  : no dim file provided! Please use the --dim-file option." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    */
-    //std::cout << "  dim file: OK - " << get_dim_file() << "\n";
-    /*
-    if (count_phen_files() == 0 && count_phen_files_test() == 0) {
-        std::cout << "FATAL  : no phen file(s) provided! Please use the --phen-files option." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    */
-    //std::cout << "  phen file(s): OK - " << count_phen_files() << " files passed.\n";
-    //list_phen_files();
-
-
-    // group index and mixture files: either both or none
-    /*
-    if (! predict_) {
-        if ( (group_index_file == "" && group_mixture_file != "") ||
-             (group_index_file != "" && group_mixture_file == ""))  {
-            std::cout << "FATAL  : you need to activate BOTH --group-index-file and --group-mixture-file" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    if (predict_) {
-        if (bim_file == "") {
-            std::cout << "FATAL  : you need to pass a bim file with --bim-file when activating --predict" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-        if (ref_bim_file == "") {
-            std::cout << "FATAL  : you need to pass a reference bim file with --ref-bim-file when activating --predict" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-    */
-
-     //assert(vars.size() == num_mix_comp || run_mode == "test");
-     //assert(probs.size() == num_mix_comp || run_mode == "test");
 }
-
-/*
-void Options::read_group_mixture_file() {
-
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    std::fstream fs;
-    fs.open(group_mixture_file, std::ios::in);
-
-    int ngroups0 = -1;
-    int groupi   =  0;
-    std::vector<std::vector<std::string>> mixtures;
-
-    if (fs.is_open()) {
-        if (rank == 0)
-            std::cout << "INFO   : Reading group mixtures from [" + group_mixture_file + "]." << std::endl;
-        std::string mixture_line;
-        std::regex ws_re("\\s+");
-        while(getline(fs, mixture_line)) {
-            //std::cout << "::: " << mixture_line << "\n";
-            boost::algorithm::trim(mixture_line);
-            if (mixture_line.length() == 0)  continue;
-            std::vector<std::string> one_group_mixtures { 
-                std::sregex_token_iterator(mixture_line.begin(), mixture_line.end(), ws_re, -1), {} 
-            };
-            int ngroups = one_group_mixtures.size();
-            if (ngroups0 < 0) ngroups0 = ngroups;
-            if (ngroups != ngroups0) {
-                printf("FATAL  : check your mixture file. The same number of mixtures is expected for all groups.\n");
-                printf("       : got %d mixtures for group %d, while first group had %d.\n", ngroups, groupi, ngroups0);
-                exit(1);
-            }
-            //std::cout << "found " << ngroups << ", first el is >>" << one_group_mixtures.at(0)<< "<<" << std::endl;
-            mixtures.push_back(one_group_mixtures);
-            groupi++;
-        }
-        fs.close();
-    } else {
-        printf("FATAL  : can not open the mixture file %s. Use the --group-mixture-file option!\n", group_mixture_file.c_str());
-        exit(1);
-    }
-
-    _set_ngroups(groupi);
-    _set_nmixtures(ngroups0);
-
-    cva.resize(ngroups);
-    cvai.resize(ngroups);
-    for (int i = 0; i < ngroups; i++) {
-        cva[i].resize(nmixtures);
-        cvai[i].resize(nmixtures);
-        for (int j=0; j<nmixtures; j++) {
-            cva[i][j]  = stod(mixtures[i][j]);
-            if (j == 0 && cva[i][j] != 0.0) {
-                printf("FATAL  : First element of group mixture must be 0.0! Check your input file %s.\n", group_mixture_file.c_str());
-                exit(1);
-            }            
-            if (j > 0) {
-                if (cva[i][j] <= cva[i][j-1]) {
-                    printf("FATAL  : Mixtures must be given in ascending order! Check your input file %s.\n", group_mixture_file.c_str());
-                    exit(1);
-                }
-                cvai[i][j] = 1.0 / cva[i][j];
-            }
-        }
-    }
-}
-*/

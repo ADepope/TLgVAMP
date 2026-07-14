@@ -112,10 +112,6 @@ data::data(std::vector<double> y, std::string genofp, const int N, const int M, 
     
 }
 
-
-
-
-
 //**************************
 // DATA LOADING PROCEDURES
 //**************************
