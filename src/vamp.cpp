@@ -236,7 +236,7 @@ std::vector<double> vamp::infere_linear(data* dataset){
         std::vector<double> r1_init = mpi_read_vec_from_file(r1_init_file, M, (*dataset).get_S()); 
         for (int i=0; i<M; i++)
             r1_init[i] /= sqrt(N);
-        r1 = r1_init;   
+        r1 = r1_init; 
     }
 
     if (init_est == 1){
@@ -302,6 +302,13 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
             if (it==1 && init_est==1)
                 x1_hat = r1;
+
+            // Add this print statement:
+            if (rank == 0) {
+                std::cout << "[DEBUG] Iteration " << it 
+                        << ": x1_hat[1] = " << x1_hat[1] 
+                        << " | r1[1] = " << r1[1] << std::endl;
+            }
 
             std::vector<double> x1_hat_m_r1 = x1_hat;
             for (int i0 = 0; i0 < x1_hat_m_r1.size(); i0++)
@@ -597,8 +604,13 @@ std::vector<double> vamp::infere_linear(data* dataset){
         if (use_tl_lmmse) {
             
             double prior_weight = 0.01 * Mt; 
+            // double prior_weight = 0.001 * Mt; 
             double a0_tl = 50.0 * prior_weight; 
             double b0_tl = 1.0 * prior_weight;
+
+            // double prior_weight = 0.01 * Mt; 
+            // double b0_tl = 1.0 * prior_weight;
+            // double a0_tl = gamma_tl * b0_tl;
 
             double tau2 = alpha2 / gam2; 
 
@@ -619,7 +631,7 @@ std::vector<double> vamp::infere_linear(data* dataset){
                 
                 double penalty_weight = (0.5 * s_diff_global) / (a0_tl - 1.0 + 0.5 * Mt);
 
-                std::vector<double> hyper_candidates = {0.0, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0};
+                std::vector<double> hyper_candidates = {0.0, 0.000001, 0.0001, 0.01, 1.0, 10.0, 100.0, 1000.0};
                 
                 double best_hyper = 0.0;
                 double best_base  = gamma_tl; 
@@ -641,7 +653,7 @@ std::vector<double> vamp::infere_linear(data* dataset){
                     double objective = std::log(b0_tl + 0.5 * sum_w_D) + test_hyper * penalty_weight;
 
                     if (rank == 0) {
-                        std::cout << "DEBUG GRID: hyper=" << test_hyper 
+                        std::cout << "GRID: hyper=" << test_hyper 
                                 << " | log_err=" << std::log(b0_tl + 0.5 * sum_w_D)
                                 << " | penalty=" << test_hyper * penalty_weight
                                 << " | total=" << objective << std::endl;
@@ -655,7 +667,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
                 }
 
                 gamma_tl = std::min(std::max(best_base, 1.0), 5000.0);
-                gamma_hyper = best_hyper;
+                // gamma_hyper = best_hyper;
+                gamma_hyper/=10;
 
                 if (rank == 0) {
                     std::cout << "[TL-LMMSE MAF-EM] Updated Params -> gamma_base: " << gamma_tl  
