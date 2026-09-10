@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <vector> 
 #include <tuple>
 #include "data.hpp"
@@ -74,18 +75,26 @@ private:
     std::string freeze_index_file;
     std::string r1_add_info_file;
 
-    int            use_tl_lmmse = 0;   // 0 = classic, 1 = TL version
-    double         gamma_tl = 0;       // γ_TL
-    std::vector<double> r_tl;      // β_TL  (size M)
-    std::string r_tl_file;
+    int use_tl_lmmse = 0;
 
-    std::string maf_pop1_file;
-    std::string maf_pop2_file;
-    std::vector<double> maf_pop1;
-    std::vector<double> maf_pop2;
-    std::vector<double> gamma_tl_vec;
+    // Multi-source TL inputs
+    std::vector<double> gamma_tls;              // size = number of sources
+    std::vector<std::string> r_tl_files;        // size = number of sources
+    std::vector< std::vector<double> > r_tls;   // r_tls[s][i]
+
+    // Multi-source MAF inputs
+    std::string maf_pop1_file;                    // one target MAF file
+    std::vector<std::string> maf_pop2_files;      // one source MAF file per TL source
+
+    std::vector<double> maf_pop1_target;          // target MAF values, size M
+    std::vector< std::vector<double> > maf_pop2_sources; // source MAF values, [source][marker]
+
+    // Per-marker total TL precision and RHS contribution
+    std::vector<double> gamma_tl_vec;   // gamma_tl_vec[i] = sum_s gamma_s_i
+    std::vector<double> tl_rhs_vec;     // tl_rhs_vec[i] = sum_s gamma_s_i * r_tls[s][i]
+
     bool use_maf_tl = true;
-    double gamma_hyper = 200.0; 
+    double gamma_hyper = 200.0;
 
 public:
 

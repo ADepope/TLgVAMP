@@ -1,3 +1,4 @@
+#include "options.hpp"
 #include <iostream>
 #include <cstring>
 #include <sstream>
@@ -7,10 +8,45 @@
 #include <regex>
 #include <mpi.h>
 #include <boost/algorithm/string/trim.hpp> // -> module load boost 
-#include "options.hpp"
 #include <experimental/filesystem>
 
 namespace fs = std::experimental::filesystem;
+
+static std::string trim_copy(const std::string& s) {
+    const std::size_t begin = s.find_first_not_of(" \t\n\r");
+    if (begin == std::string::npos) return "";
+
+    const std::size_t end = s.find_last_not_of(" \t\n\r");
+    return s.substr(begin, end - begin + 1);
+}
+
+static std::vector<std::string> split_csv_strings(const std::string& input) {
+    std::vector<std::string> out;
+    std::stringstream ss(input);
+    std::string item;
+
+    while (std::getline(ss, item, ',')) {
+        item = trim_copy(item);
+        if (!item.empty())
+            out.push_back(item);
+    }
+
+    return out;
+}
+
+static std::vector<double> split_csv_doubles(const std::string& input) {
+    std::vector<double> out;
+    std::stringstream ss(input);
+    std::string item;
+
+    while (std::getline(ss, item, ',')) {
+        item = trim_copy(item);
+        if (!item.empty())
+            out.push_back(std::stod(item));
+    }
+
+    return out;
+}
 
 // Function to parse command line options
 void Options::read_command_line_options(int argc, char** argv) {
@@ -75,14 +111,45 @@ void Options::read_command_line_options(int argc, char** argv) {
             ss << "--use-tl-lmmse " << use_tl_lmmse << "\n";
         }
         else if (!strcmp(argv[i], "--gamma-tl")) {
-            if (i == argc - 1) fail_if_last(argv,i);
-            gamma_tl = atof(argv[++i]);
-            ss << "--gamma-tl " << gamma_tl << "\n";
+            if (i == argc - 1) fail_if_last(argv, i);
+
+            std::string cslist = argv[++i];
+            gamma_tls = split_csv_doubles(cslist);
+
+            if (gamma_tls.empty()) {
+                std::cout << "FATAL  : option --gamma-tl received an empty list.\n";
+                exit(EXIT_FAILURE);
+            }
+
+            for (double g : gamma_tls) {
+                if (g < 0.0) {
+                    std::cout << "FATAL  : all --gamma-tl values must be non-negative.\n";
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            ss << "--gamma-tl " << cslist << "\n";
         }
         else if (!strcmp(argv[i], "--r-tl-file")) {
-            if (i == argc - 1) fail_if_last(argv,i);
-            r_tl_file = argv[++i];
-            ss << "--r-tl-file " << r_tl_file << "\n";
+            if (i == argc - 1) fail_if_last(argv, i);
+
+            std::string cslist = argv[++i];
+            r_tl_files = split_csv_strings(cslist);
+
+            if (r_tl_files.empty()) {
+                std::cout << "FATAL  : option --r-tl-file received an empty list.\n";
+                exit(EXIT_FAILURE);
+            }
+
+            for (const std::string& filepath : r_tl_files) {
+                std::ifstream f(filepath);
+                if (!f.is_open()) {
+                    std::cout << "FATAL  : TL file " << filepath << " not found.\n";
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            ss << "--r-tl-file " << cslist << "\n";
         }
         else if (!strcmp(argv[i], "--run-mode")) {
             if (i == argc - 1) fail_if_last(argv, i);
@@ -91,13 +158,37 @@ void Options::read_command_line_options(int argc, char** argv) {
         }
         else if (!strcmp(argv[i], "--maf-pop1-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
+
             maf_pop1_file = argv[++i];
+
+            std::ifstream f(maf_pop1_file);
+            if (!f.is_open()) {
+                std::cout << "FATAL  : target MAF file " << maf_pop1_file << " not found.\n";
+                exit(EXIT_FAILURE);
+            }
+
             ss << "--maf-pop1-file " << maf_pop1_file << "\n";
         }
         else if (!strcmp(argv[i], "--maf-pop2-file")) {
             if (i == argc - 1) fail_if_last(argv, i);
-            maf_pop2_file = argv[++i];
-            ss << "--maf-pop2-file " << maf_pop2_file << "\n";
+
+            std::string cslist = argv[++i];
+            maf_pop2_files = split_csv_strings(cslist);
+
+            if (maf_pop2_files.empty()) {
+                std::cout << "FATAL  : option --maf-pop2-file received an empty list.\n";
+                exit(EXIT_FAILURE);
+            }
+
+            for (const std::string& filepath : maf_pop2_files) {
+                std::ifstream f(filepath);
+                if (!f.is_open()) {
+                    std::cout << "FATAL  : MAF pop2 file " << filepath << " not found.\n";
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            ss << "--maf-pop2-file " << cslist << "\n";
         }
         // List of phenotype files to read; comma separated if more than one.
         else if (!strcmp(argv[i], "--phen-files")) {

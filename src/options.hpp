@@ -60,10 +60,23 @@ public:
     double get_gamma_damp() const { return gamma_damp; }
     
     unsigned int get_use_tl_lmmse() const { return use_tl_lmmse; }
-    double       get_gamma_tl()     const { return gamma_tl; }
-    std::string  get_r_tl_file()    const { return r_tl_file; }
+
+    // Multi-source TL getters
+    const std::vector<double>& get_gamma_tls() const { return gamma_tls; }
+    const std::vector<std::string>& get_r_tl_files() const { return r_tl_files; }
+
     std::string get_maf_pop1_file() const { return maf_pop1_file; }
-    std::string get_maf_pop2_file() const { return maf_pop2_file; }
+    const std::vector<std::string>& get_maf_pop2_files() const { return maf_pop2_files; }
+
+    // Backward-compatible single-source getters.
+    // These return the first entry if multiple were supplied.
+    double get_gamma_tl() const {
+        return gamma_tls.empty() ? 0.0 : gamma_tls.front();
+    }
+
+    std::string get_r_tl_file() const {
+        return r_tl_files.empty() ? "" : r_tl_files.front();
+    }
 
     std::vector<double> get_vars() const { return vars; } 
     std::vector<double> get_probs() const { return probs; }
@@ -96,8 +109,6 @@ private:
     std::string out_name = "";
     std::string model = "linear";
     std::string scheduler= "";
-    std::string maf_pop1_file = "";
-    std::string maf_pop2_file = "";
 
     double stop_criteria_thr = 1e-4;
     double EM_err_thr = 1e-2;
@@ -140,9 +151,13 @@ private:
     std::vector<std::string> phen_files_test;
     std::vector<std::string> true_signal_files;
 
-    unsigned int use_tl_lmmse = 0;   // 0 = classic VAMP  , 1 = TL–LMMSE
-    double       gamma_tl     = 0.;  // γ_TL
-    std::string  r_tl_file    = "";  // path to β_TL
+    unsigned int use_tl_lmmse = 0;        // 0 = classic VAMP, 1 = TL-LMMSE
+
+    std::vector<double> gamma_tls;        // one gamma per TL source
+    std::vector<std::string> r_tl_files;  // one beta_TL file per TL source
+
+    std::string maf_pop1_file = "";           // one target MAF file
+    std::vector<std::string> maf_pop2_files;  // one source MAF file per TL source  
 
     void check_options();
 };

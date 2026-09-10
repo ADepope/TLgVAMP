@@ -302,14 +302,6 @@ void data::read_covariates(std::string covfp, int C){ // values should be separa
             entries.push_back(std::stod(*iter));
             Cobs++;
         }
-            
-        /*
-        for (auto it = std::sregex_iterator(line.begin(), line.end(), re); it != std::sregex_iterator(); it++) {
-            std::string token = (*it).str();
-            entries.push_back(std::stod(token));
-            Cobs++;      
-        }   
-        */
 
         if (Cobs != C){
             std::cout << "FATAL: number of covariates = " << Cobs << " does not match to the specified number of covariates = " << C << std::endl;
@@ -357,8 +349,6 @@ std::vector<int> data::read_chromosome_info(std::string bim_file){
                 std::vector<std::string> tokens{first, last};
                 // first line of .bim file contains information on the chromosome index
                 const char * Xchr = "X";
-                //if (rank == 0)
-                //    std::cout << "tokens[0] = " << tokens[0] << "atof( tokens[0].c_str() ) = " << atof( tokens[0].c_str() ) << std::endl;
                 if (!strcmp(tokens[0].c_str(), Xchr))
                     chroms.push_back(23);
                 else
@@ -871,9 +861,6 @@ std::vector<double> data::Ax(double* __restrict__ phen, int SB, int LB) {
         
         /*
         #ifdef _OPENMP2
-
-        if (rank == 0)
-            std::cout << "_OPENMP2 is defined!" << std::endl;
 
         #pragma omp declare reduction(vec_add_d : std::vector<double> : std::transform(omp_in.begin(),omp_in.end(),omp_out.begin(),omp_out.begin(),std::plus<double>())) initializer (omp_priv=omp_orig)
 

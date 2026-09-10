@@ -53,11 +53,16 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     MPI_Comm_size(MPI_COMM_WORLD, &nranks);
 
     use_tl_lmmse = opt.get_use_tl_lmmse();
-    gamma_tl     = opt.get_gamma_tl();
-    r_tl.clear();
-    r_tl_file    = opt.get_r_tl_file();
-    maf_pop1_file=opt.get_maf_pop1_file();
-    maf_pop2_file=opt.get_maf_pop2_file();
+    gamma_tls    = opt.get_gamma_tls();
+    r_tl_files   = opt.get_r_tl_files();
+
+    r_tls.clear();
+
+    maf_pop1_file  = opt.get_maf_pop1_file();
+    maf_pop2_files = opt.get_maf_pop2_files();
+
+    maf_pop1_target.clear();
+    maf_pop2_sources.clear();
 }
 
 // -> DESCRIPTION: constructor in which all parameters are passed from an Options class
@@ -99,11 +104,16 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     MPI_Comm_size(MPI_COMM_WORLD, &nranks);   
 
     use_tl_lmmse = opt.get_use_tl_lmmse();
-    gamma_tl     = opt.get_gamma_tl();
-    r_tl.clear();
-    r_tl_file    = opt.get_r_tl_file();
-    maf_pop1_file=opt.get_maf_pop1_file();
-    maf_pop2_file=opt.get_maf_pop2_file();
+    gamma_tls    = opt.get_gamma_tls();
+    r_tl_files   = opt.get_r_tl_files();
+
+    r_tls.clear();
+
+    maf_pop1_file  = opt.get_maf_pop1_file();
+    maf_pop2_files = opt.get_maf_pop2_files();
+
+    maf_pop1_target.clear();
+    maf_pop2_sources.clear();
 }
 
 //*********************************
@@ -111,20 +121,56 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
 //*********************************
 std::vector<double> vamp::infere( data* dataset ){
 
-    if (use_tl_lmmse && r_tl.empty()) {
-        r_tl = mpi_read_vec_from_file(r_tl_file, M, dataset->get_S());
-        for (double &v : r_tl) v *= std::sqrt((double)N);   // scale β_TL
-        gamma_tl /= (double) N;                             // scale γ_TL
-        if (rank==0) std::cout << "[TL-LMMSE] r_TL loaded.\n";
-        if (rank==0) std::cout << "gamma_tl = " << gamma_tl << "\n";
+    if (use_tl_lmmse && r_tls.empty()) {
+        const int S = dataset->get_S();
+        const std::size_t nsrc = r_tl_files.size();
+
+        r_tls.resize(nsrc);
+
+        for (std::size_t s = 0; s < nsrc; ++s) {
+            r_tls[s] = mpi_read_vec_from_file(r_tl_files[s], M, S);
+
+            // Scale beta_TL to match internal VAMP scaling
+            for (double& v : r_tls[s])
+                v *= std::sqrt((double)N);
+
+            // Scale gamma_TL to match internal VAMP scaling
+            gamma_tls[s] /= (double)N;
+
+            if (rank == 0) {
+                std::cout << "[TL-LMMSE] Loaded source " << s
+                        << ": r_tl_file = " << r_tl_files[s]
+                        << ", gamma_tl = " << gamma_tls[s] << "\n";
+            }
+        }
     }
 
-    // Load MAF arrays 
-    if (use_tl_lmmse && maf_pop1_file != "" && maf_pop2_file != "") {
-        int S = dataset->get_S(); // The starting SNP index for THIS rank
-        if (maf_pop1.empty()) maf_pop1 = read_maf_from_frq(maf_pop1_file, M, S);
-        if (maf_pop2.empty()) maf_pop2 = read_maf_from_frq(maf_pop2_file, M, S);
-        if (rank == 0) std::cout << "[TL-LMMSE] MAF frequency files loaded successfully.\n";
+    if (use_tl_lmmse &&
+        !maf_pop1_file.empty() &&
+        !maf_pop2_files.empty() &&
+        maf_pop1_target.empty()) {
+
+        const int S = dataset->get_S();
+        const std::size_t nsrc = maf_pop2_files.size();
+
+        // Load target MAF once
+        maf_pop1_target = read_maf_from_frq(maf_pop1_file, M, S);
+
+        // Load one source MAF per TL source
+        maf_pop2_sources.resize(nsrc);
+
+        for (std::size_t s = 0; s < nsrc; ++s) {
+            maf_pop2_sources[s] = read_maf_from_frq(maf_pop2_files[s], M, S);
+
+            if (rank == 0) {
+                std::cout << "[TL-LMMSE] Loaded source MAF " << s
+                        << ": target = " << maf_pop1_file
+                        << ", source = " << maf_pop2_files[s] << "\n";
+            }
+        }
+
+        if (rank == 0)
+            std::cout << "[TL-LMMSE] Target and source MAF files loaded.\n";
     }
 
     y = (*dataset).get_phen();
@@ -292,12 +338,6 @@ std::vector<double> vamp::infere_linear(data* dataset){
             if (it==1 && init_est==1)
                 x1_hat = r1;
 
-            if (rank == 0) {
-                std::cout << "[DEBUG] Iteration " << it 
-                        << ": x1_hat[1] = " << x1_hat[1] 
-                        << " | r1[1] = " << r1[1] << std::endl;
-            }
-
             std::vector<double> x1_hat_m_r1 = x1_hat;
             for (int i0 = 0; i0 < x1_hat_m_r1.size(); i0++)
                 x1_hat_m_r1[i0] = x1_hat_m_r1[i0] - r1[i0];
@@ -322,8 +362,10 @@ std::vector<double> vamp::infere_linear(data* dataset){
             if (it <= 1) break;
 
             gam1_reEst_prev = gam1;
-            if (it > 1)
-                gam1 = std::min( std::max(  1.0 / (1.0/eta1 + l2_norm2(x1_hat_m_r1, 1)/Mt), gamma_min ), gamma_max );
+            if (it > 1){
+                double gam1_candidate = std::min( std::max(  1.0 / (1.0/eta1 + l2_norm2(x1_hat_m_r1, 1)/Mt), gamma_min ), gamma_max );
+                gam1 = gamma_damp * gam1_candidate + (1.0 - gamma_damp) * gam1_reEst_prev;
+            }
             else
                 break;
 
@@ -487,21 +529,39 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
         double start_CG = MPI_Wtime();    
 
-        /* ============================================================
-        LMMSE via CG – Unified TL (Global or MAF-aware)
+       /* ============================================================
+        LMMSE via CG – Multi-source TL, scalar gamma per source
         ============================================================ */
         if (use_tl_lmmse) {
-            if (gamma_tl_vec.size() != M) gamma_tl_vec.resize(M, 0.0);
-            
-            for (int i = 0; i < M; i++) {
-                if (use_maf_tl && !maf_pop1.empty() && !maf_pop2.empty()) {
-                    double maf_diff = maf_pop1[i] - maf_pop2[i];
-                    double w_i = std::exp(-gamma_hyper * (maf_diff * maf_diff));
-                    gamma_tl_vec[i] = gamma_tl * w_i;
-                } 
-                else {
-                    gamma_tl_vec[i] = gamma_tl; 
+            gamma_tl_vec.assign(M, 0.0);
+            tl_rhs_vec.assign(M, 0.0);
+
+            const std::size_t nsrc = r_tls.size();
+
+            for (int i = 0; i < M; ++i) {
+                double gamma_sum_i = 0.0;
+                double rhs_sum_i = 0.0;
+
+                for (std::size_t s = 0; s < nsrc; ++s) {
+                    double w_si = 1.0;
+
+                    if (use_maf_tl &&
+                        !maf_pop1_target.empty() &&
+                        !maf_pop2_sources.empty()) {
+
+                        const double maf_diff = maf_pop1_target[i] - maf_pop2_sources[s][i];
+                        w_si = std::exp(-gamma_hyper * maf_diff * maf_diff);
+                    }
+
+                    // One scalar gamma per source population
+                    const double gamma_si = gamma_tls[s] * w_si;
+
+                    gamma_sum_i += gamma_si;
+                    rhs_sum_i   += gamma_si * r_tls[s][i];
                 }
+
+                gamma_tl_vec[i] = gamma_sum_i;
+                tl_rhs_vec[i]   = rhs_sum_i;
             }
         }
 
@@ -514,8 +574,9 @@ std::vector<double> vamp::infere_linear(data* dataset){
         for (int i = 0; i < M; ++i)
         {
             b[i] = gamw * b[i] + gam2 * r2[i];
-            if (use_tl_lmmse)            
-                b[i] += gamma_tl_vec[i] * r_tl[i];
+
+            if (use_tl_lmmse)
+                b[i] += tl_rhs_vec[i];
         }
 
         x2_hat = precondCG_solver(
@@ -541,135 +602,191 @@ std::vector<double> vamp::infere_linear(data* dataset){
             std::cout << "alpha2 = " << alpha2 << std::endl;
         }
 
-        // onsager approx
-        if (it > 1){
-            std::vector<double> r2_m_r2prev = r2;
-            for (int i=0; i<M; i++)
-                r2_m_r2prev[i] -= r2_prev[i];
-
-            double onsager_approx = inner_prod(x2_hat, r2_m_r2prev, 1) / inner_prod(r2, r2_m_r2prev, 1);
-            if (rank == 0) std::cout << "onsager approx = " << onsager_approx << std::endl;
-
-            // polynomial onsager approximator
-            std::vector<double> Xr2 = (*dataset).Ax(r2.data());
-            std::vector<double> r2_m_x2hat = r2;
-            for (int i=0; i<M; i++)
-                r2_m_x2hat[i] -= x2_hat[i];
-                
-            std::vector<double> Xx2hat_m_y = (*dataset).Ax(x2_hat.data());
-            for (int i=0; i<N; i++)
-                Xx2hat_m_y[i] -= y[i];
-
-            double u1 = (l2_norm2(r2_m_x2hat,1) - 1.0/gam2 - l2_norm2(Xx2hat_m_y,0) + (double) N / (double) Mt / gamw) / Mt;
-            double u2 = (inner_prod(r2,r2,1) - inner_prod(x2_hat,r2,1) - inner_prod(y, Xr2, 0) + inner_prod((*dataset).Ax(x2_hat.data()), Xr2,0) )/Mt*2;
-            double u3 = l2_norm2(r2,1)/Mt - l2_norm2(Xr2,0)/Mt;
-            
-            if (rank == 0){
-                double polyest1 = (-u2 + sqrt(u2*u2 - 4*u1*u3))/2/u3;
-                double polyest2 = (-u2 - sqrt(u2*u2 - 4*u1*u3))/2/u3;
-                double polyest = (u3<0) ? std::max(polyest1,polyest2) : std::min(polyest1,polyest2);
-                std::cout << "u1 = " << u1 << ", u2 = " << u2 << ", u3 = " << u3 << "\n";
-                std::cout << "extremum = " << -u2/2/u3 << "\npolyest = " << polyest << "\n";
-            }
-        }
         eta2 = gam2 / alpha2;
 
         // =========================================================================
         // ---- ADAPTIVE TRANSFER PRECISION (gamma_base & gamma_hyper) EM-UPDATE
         // =========================================================================
-        if (use_tl_lmmse) {
+        // if (use_tl_lmmse) {
             
-            double prior_weight = 0.01 * Mt; 
-            // double prior_weight = 0.001 * Mt; 
-            double a0_tl = 50.0 * prior_weight; 
+        //     double prior_weight = 0.01 * Mt; 
+        //     // double prior_weight = 0.001 * Mt; 
+        //     double a0_tl = 50.0 * prior_weight; 
+        //     double b0_tl = 1.0 * prior_weight;
+
+        //     // double prior_weight = 0.01 * Mt; 
+        //     // double b0_tl = 1.0 * prior_weight;
+        //     // double a0_tl = gamma_tl * b0_tl;
+
+        //     double tau2 = alpha2 / gam2; 
+
+        //     if (use_maf_tl && !maf_pop1.empty() && !maf_pop2.empty()) {
+                
+        //         double s_diff_local = 0.0;
+        //         std::vector<double> D_j(M, 0.0);
+        //         for (int i = 0; i < M; i++) {
+        //             double diff = maf_pop1[i] - maf_pop2[i];
+        //             s_diff_local += (diff * diff);
+
+        //             double err = x2_hat[i] - r_tl[i];
+        //             D_j[i] = (err * err) + tau2; 
+        //         }
+
+        //         double s_diff_global = 0.0;
+        //         MPI_Allreduce(&s_diff_local, &s_diff_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                
+        //         double penalty_weight = (0.5 * s_diff_global) / (a0_tl - 1.0 + 0.5 * Mt);
+
+        //         std::vector<double> hyper_candidates = {0.0, 0.000001, 0.0001, 0.01, 1.0, 10.0, 100.0, 1000.0};
+                
+        //         double best_hyper = 0.0;
+        //         double best_base  = gamma_tl; 
+        //         double min_objective = 1e30;
+
+        //         for (double test_hyper : hyper_candidates) {
+        //             double w_local = 0.0;
+        //             for (int i = 0; i < M; i++) {
+        //                 double diff = maf_pop1[i] - maf_pop2[i];
+        //                 double w_i = std::exp(-test_hyper * (diff * diff));
+        //                 w_local += w_i * D_j[i];
+        //             }
+
+        //             double w_global = 0.0;
+        //             MPI_Allreduce(&w_local, &w_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                    
+        //             double sum_w_D = w_global;
+                    
+        //             double objective = std::log(b0_tl + 0.5 * sum_w_D) + test_hyper * penalty_weight;
+
+        //             if (rank == 0) {
+        //                 std::cout << "GRID: hyper=" << test_hyper 
+        //                         << " | log_err=" << std::log(b0_tl + 0.5 * sum_w_D)
+        //                         << " | penalty=" << test_hyper * penalty_weight
+        //                         << " | total=" << objective << std::endl;
+        //             }
+
+        //             if (objective < min_objective) {
+        //                 min_objective = objective;
+        //                 best_hyper = test_hyper;
+        //                 best_base = (a0_tl - 1.0 + 0.5 * Mt) / (b0_tl + 0.5 * sum_w_D);
+        //             }
+        //         }
+
+        //         gamma_tl = std::min(std::max(best_base, 1.0), 5000.0);
+        //         // gamma_hyper = best_hyper;
+        //         gamma_hyper/=10;
+
+        //         if (rank == 0) {
+        //             std::cout << "[TL-LMMSE MAF-EM] Updated Params -> gamma_base: " << gamma_tl  
+        //                       << " | gamma_hyper: " << gamma_hyper << std::endl;
+        //         }
+        //     } 
+        //     else {
+        //         double tl_diff_sq_local = 0.0;
+        //         for (int i = 0; i < M; i++) {
+        //             double diff = x2_hat[i] - r_tl[i];
+        //             tl_diff_sq_local += diff * diff;
+        //         }
+                
+        //         double tl_diff_sq_global = 0.0;
+        //         MPI_Allreduce(&tl_diff_sq_local, &tl_diff_sq_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+        //         double trace_Sigma = (alpha2 * Mt) / gam2; 
+
+        //         double gamma_tl_new = (a0_tl - 1.0 + 0.5 * Mt) / (b0_tl + 0.5 * (tl_diff_sq_global + trace_Sigma));
+        //         gamma_tl = std::min(std::max(gamma_tl_new, 1.0), 5000.0);
+
+        //         if (rank == 0) {
+        //             std::cout << "[TL-LMMSE Global-EM] Adaptive gamma_base updated: " << gamma_tl << std::endl;
+        //         }
+        //     }
+        // }
+
+        // =========================================================================
+        // ---- ADAPTIVE TRANSFER PRECISION FOR MULTIPLE SOURCES
+        //      gamma_tls[s] = one scalar transfer precision per source population
+        // =========================================================================
+        if (use_tl_lmmse) {
+
+            const std::size_t nsrc = r_tls.size();
+
+            double prior_weight = 0.01 * Mt;
+            double a0_tl = 50.0 * prior_weight;
             double b0_tl = 1.0 * prior_weight;
 
-            // double prior_weight = 0.01 * Mt; 
-            // double b0_tl = 1.0 * prior_weight;
-            // double a0_tl = gamma_tl * b0_tl;
+            // Average posterior variance approximation.
+            // This is the same approximation used in the old single-source block:
+            // D_j = (x2_hat[j] - r_tl[j])^2 + tau2
+            double tau2 = alpha2 / gam2;
 
-            double tau2 = alpha2 / gam2; 
+            std::vector<double> gamma_tls_new(nsrc, 0.0);
 
-            if (use_maf_tl && !maf_pop1.empty() && !maf_pop2.empty()) {
-                
-                double s_diff_local = 0.0;
-                std::vector<double> D_j(M, 0.0);
-                for (int i = 0; i < M; i++) {
-                    double diff = maf_pop1[i] - maf_pop2[i];
-                    s_diff_local += (diff * diff);
+            for (std::size_t s = 0; s < nsrc; ++s) {
 
-                    double err = x2_hat[i] - r_tl[i];
-                    D_j[i] = (err * err) + tau2; 
+                double E_local = 0.0;
+                double quad_local = 0.0;
+                double weight_sum_local = 0.0;
+
+                for (int i = 0; i < M; ++i) {
+
+                    double w_si = 1.0;
+
+                    // Optional MAF-aware downweighting:
+                    // target MAF is maf_pop1_target[i]
+                    // source-s MAF is maf_pop2_sources[s][i]
+                    if (use_maf_tl &&
+                        !maf_pop1_target.empty() &&
+                        !maf_pop2_sources.empty()) {
+
+                        double maf_diff = maf_pop1_target[i] - maf_pop2_sources[s][i];
+                        w_si = std::exp(-gamma_hyper * maf_diff * maf_diff);
+                    }
+
+                    double err = x2_hat[i] - r_tls[s][i];
+
+                    // E_k contribution:
+                    // sum_j w_{s,j} [ (x2_hat_j - r_source_sj)^2 + posterior_variance_j ]
+                    //
+                    // We approximate posterior_variance_j by tau2 = alpha2 / gam2,
+                    // matching the old implementation.
+                    E_local += w_si * (err * err + tau2);
+
+                    // diagnostics only
+                    quad_local += w_si * err * err;
+                    weight_sum_local += w_si;
                 }
 
-                double s_diff_global = 0.0;
-                MPI_Allreduce(&s_diff_local, &s_diff_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                
-                double penalty_weight = (0.5 * s_diff_global) / (a0_tl - 1.0 + 0.5 * Mt);
+                double E_global = 0.0;
+                double quad_global = 0.0;
+                double weight_sum_global = 0.0;
 
-                std::vector<double> hyper_candidates = {0.0, 0.000001, 0.0001, 0.01, 1.0, 10.0, 100.0, 1000.0};
-                
-                double best_hyper = 0.0;
-                double best_base  = gamma_tl; 
-                double min_objective = 1e30;
+                MPI_Allreduce(&E_local, &E_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(&quad_local, &quad_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                MPI_Allreduce(&weight_sum_local, &weight_sum_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-                for (double test_hyper : hyper_candidates) {
-                    double w_local = 0.0;
-                    for (int i = 0; i < M; i++) {
-                        double diff = maf_pop1[i] - maf_pop2[i];
-                        double w_i = std::exp(-test_hyper * (diff * diff));
-                        w_local += w_i * D_j[i];
-                    }
+                // MAP-style update, matching your old code:
+                // gamma = (a0 - 1 + P/2) / (b0 + E/2)
+                double gamma_new = (a0_tl - 1.0 + 0.5 * Mt) / (b0_tl + 0.5 * E_global);
 
-                    double w_global = 0.0;
-                    MPI_Allreduce(&w_local, &w_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                    
-                    double sum_w_D = w_global;
-                    
-                    double objective = std::log(b0_tl + 0.5 * sum_w_D) + test_hyper * penalty_weight;
+                // Keep the same clamp as the old single-source code.
+                gamma_new = std::min(std::max(gamma_new, 1.0), 5000.0);
 
-                    if (rank == 0) {
-                        std::cout << "GRID: hyper=" << test_hyper 
-                                << " | log_err=" << std::log(b0_tl + 0.5 * sum_w_D)
-                                << " | penalty=" << test_hyper * penalty_weight
-                                << " | total=" << objective << std::endl;
-                    }
-
-                    if (objective < min_objective) {
-                        min_objective = objective;
-                        best_hyper = test_hyper;
-                        best_base = (a0_tl - 1.0 + 0.5 * Mt) / (b0_tl + 0.5 * sum_w_D);
-                    }
-                }
-
-                gamma_tl = std::min(std::max(best_base, 1.0), 5000.0);
-                // gamma_hyper = best_hyper;
-                gamma_hyper/=10;
+                gamma_tls_new[s] = gamma_new;
 
                 if (rank == 0) {
-                    std::cout << "[TL-LMMSE MAF-EM] Updated Params -> gamma_base: " << gamma_tl  
-                              << " | gamma_hyper: " << gamma_hyper << std::endl;
-                }
-            } 
-            else {
-                double tl_diff_sq_local = 0.0;
-                for (int i = 0; i < M; i++) {
-                    double diff = x2_hat[i] - r_tl[i];
-                    tl_diff_sq_local += diff * diff;
-                }
-                
-                double tl_diff_sq_global = 0.0;
-                MPI_Allreduce(&tl_diff_sq_local, &tl_diff_sq_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-                double trace_Sigma = (alpha2 * Mt) / gam2; 
-
-                double gamma_tl_new = (a0_tl - 1.0 + 0.5 * Mt) / (b0_tl + 0.5 * (tl_diff_sq_global + trace_Sigma));
-                gamma_tl = std::min(std::max(gamma_tl_new, 1.0), 5000.0);
-
-                if (rank == 0) {
-                    std::cout << "[TL-LMMSE Global-EM] Adaptive gamma_base updated: " << gamma_tl << std::endl;
+                    std::cout << "[TL-LMMSE multi-source EM] source " << s
+                            << ": gamma_old = " << gamma_tls[s]
+                            << ", gamma_new = " << gamma_new
+                            << ", E = " << E_global
+                            << ", weighted_quad = " << quad_global
+                            << ", weight_sum = " << weight_sum_global
+                            << ", tau2 = " << tau2
+                            << std::endl;
                 }
             }
+
+            // Updated gammas are used in the next VAMP iteration.
+            gamma_tls = gamma_tls_new;
         }
 
         std::vector<double> x2_hat_m_r2 = x2_hat;
@@ -677,7 +794,8 @@ std::vector<double> vamp::infere_linear(data* dataset){
             x2_hat_m_r2[i0] = x2_hat_m_r2[i0] - r2[i0];
 
         if (auto_var_max_iter >= 1 && it > 2){
-            gam2 = std::min( std::max(  1 / (1/eta2 + l2_norm2(x2_hat_m_r2, 1)/Mt), gamma_min ), gamma_max );
+            double gam2_candidate = std::min( std::max(  1 / (1/eta2 + l2_norm2(x2_hat_m_r2, 1)/Mt), gamma_min ), gamma_max );
+            gam2 = gamma_damp * gam2_candidate + (1.0 - gamma_damp) * gam2;
         }
 
         if (rank == 0) std::cout << "gam2 re-est = " << gam2 << std::endl;
@@ -958,7 +1076,8 @@ void vamp::updateNoisePrec(data* dataset){
         std::cout << "trace_correction / N = " << trace_corr / N << "\n";
     }
 
-    gamw = (double) N / (temp_norm2 + trace_corr);
+    double gamw_candidate = (double) N / (temp_norm2 + trace_corr);
+    gamw = gamma_damp * gamw_candidate + (1.0 - gamma_damp) * gamw;
 }
 
 void vamp::updatePrior(int verbose = 1) {
@@ -1082,6 +1201,26 @@ void vamp::updatePrior(int verbose = 1) {
                 k--;
             }
         }
+    }
+
+    // vars are scaled by N, so the prior implies h2 = (Mt/N) * sum(probs*vars).
+    // The EM above is unconstrained and can push this far above 1; rescale it back
+    // onto the noise model's signal budget. One-sided: a small h2 is left untouched.
+    double S = 0.0;
+    for (int j = 0; j < probs.size(); j++)
+        S += probs[j] * vars[j];
+
+    double h2_prior  = (double) Mt / (double) N * S;
+    double h2_target = std::min( std::max( 1.0 - 1.0 / gamw, 1e-4 ), 0.95 );
+
+    if (h2_prior > h2_target){
+        double c = h2_target / h2_prior;
+        for (int j = 0; j < vars.size(); j++)
+            vars[j] *= c;
+
+        if (rank == 0)
+            std::cout << "[prior rescale] h2 " << h2_prior << " -> " << h2_target
+                      << " (scale " << c << ")" << std::endl;
     }
 }
 

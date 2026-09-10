@@ -218,12 +218,10 @@ double log_mix_gauss_pdf_ratio(double x, std::vector<double> eta_nom, std::vecto
     double eta_nom_max = *(std::max_element(eta_nom.begin(), eta_nom.end()));
     double eta_den_max = *(std::max_element(eta_den.begin(), eta_den.end()));
     for (int i=0; i<eta_nom.size(); i++){
-        // std::cout << "x = " << x << " eta_nom[i] = " << eta_nom[i] << " eta_nom_max = " << eta_nom_max << " -(pow(x, 2) / 2 * (eta_nom_max - eta_nom[i]) / eta_nom[i] / eta_nom_max ) = " << -(pow(x, 2) / 2 * (eta_nom_max - eta_nom[i]) / eta_nom[i] / eta_nom_max ) << std::endl;
         pdf_nom += pi_nom[i] / sqrt(eta_nom[i]) * exp(-(pow(x, 2) / 2 * (eta_nom_max - eta_nom[i]) / eta_nom[i] / eta_nom_max ) );
         
     }
     for (int i=0; i<eta_den.size(); i++){
-        // std::cout << "x = " << x << " eta_den[i] = " << eta_den[i] << " eta_den_max = " << eta_den_max << " -(pow(x, 2) / 2 * (eta_den_max - eta_den[i]) / eta_den[i] / eta_den_max ) = " << -(pow(x, 2) / 2 * (eta_den_max - eta_den[i]) / eta_den[i] / eta_den_max ) << std::endl;
         pdf_den += pi_den[i] / sqrt(eta_den[i]) * exp(-(pow(x, 2) / 2 * (eta_den_max - eta_den[i]) / eta_den[i] / eta_den_max ) );
     }
     // pdf_nom / pdf_den * exp( - x*x / 2 * (eta_den_max - eta_nom_max) / eta_den_max / eta_nom_max );
