@@ -46,6 +46,7 @@ private:
     double damp_min = 0.05;
     double stop_criteria_thr; // = 1e-5;
     double gamma_damp;
+    double gamw_damp;
 
     std::string model;
     std::string out_dir;

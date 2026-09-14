@@ -423,6 +423,11 @@ void Options::read_command_line_options(int argc, char** argv) {
             gamma_damp = atof(argv[++i]);
             ss << "--gamma-damp " << gamma_damp << "\n";
         }
+        else if (!strcmp(argv[i], "--gamma-damp-gamw")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            gamw_damp = atof(argv[++i]);
+            ss << "--gamma-damp-gamw " << gamw_damp << "\n";
+        }
         else if (!strcmp(argv[i], "--gam1-init")){ // strcmp return 0 if both strings are identical
             if (i == argc - 1) fail_if_last(argv, i);
             gam1_init = atof(argv[++i]);

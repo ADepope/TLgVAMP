@@ -58,7 +58,8 @@ public:
     double get_gam1_init() const { return gam1_init; }
     double get_gam1_add_info() const { return gam1_add_info; }
     double get_gamma_damp() const { return gamma_damp; }
-    
+    double get_gamw_damp() const { return gamw_damp >= 0 ? gamw_damp : gamma_damp; }
+
     unsigned int get_use_tl_lmmse() const { return use_tl_lmmse; }
 
     // Multi-source TL getters
@@ -135,6 +136,7 @@ private:
     double gamw_init;
     double gam1_init = -1;
     double gamma_damp = 1;
+    double gamw_damp = -1; // -1 sentinel: fall back to gamma_damp if --gamma-damp-gamw not passed
     double gam1_add_info = 1;
     double a_scale = 1;
 

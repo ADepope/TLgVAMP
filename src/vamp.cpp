@@ -26,7 +26,7 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     init_est(opt.get_init_est()), max_iter(max_iter), rho(rho), vars(vars), seed(opt.get_seed()),
     probs(probs), out_dir(out_dir), out_name(out_name), true_signal(true_signal),
     estimate_file(opt.get_estimate_file()), learn_vars(opt.get_learn_vars()), model(model),
-    gamma_damp(opt.get_gamma_damp()), use_freeze(opt.get_use_freeze()),
+    gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), redglob(opt.get_redglob()), rank(rank),
     r1_add_info_file(opt.get_r1_add_info_file()), scheduler(opt.get_scheduler()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -73,7 +73,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     true_signal(true_signal), model(opt.get_model()), redglob(opt.get_redglob()),
     init_est(opt.get_init_est()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), estimate_file(opt.get_estimate_file()),
-    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), rank(rank),
+    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), rank(rank),
     use_lmmse_damp(opt.get_use_lmmse_damp()),
     scheduler(opt.get_scheduler()), r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -1077,7 +1077,7 @@ void vamp::updateNoisePrec(data* dataset){
     }
 
     double gamw_candidate = (double) N / (temp_norm2 + trace_corr);
-    gamw = gamma_damp * gamw_candidate + (1.0 - gamma_damp) * gamw;
+    gamw = gamw_damp * gamw_candidate + (1.0 - gamw_damp) * gamw;
 }
 
 void vamp::updatePrior(int verbose = 1) {
@@ -1204,22 +1204,31 @@ void vamp::updatePrior(int verbose = 1) {
     }
 
     // vars are scaled by N, so the prior implies h2 = (Mt/N) * sum(probs*vars).
-    // The EM above is unconstrained and can push this far above 1; rescale it back
-    // onto the noise model's signal budget. One-sided: a small h2 is left untouched.
+    // The EM above is unconstrained and can push this far above 1, so cap it at the
+    // heritability the run was initialised with: gamw_init comes from --gamw, or from
+    // --h2 via gamw = 1/(1-h2) in main_real.cpp, so 1 - 1/gamw_init recovers that h2.
+    //
+    // The ceiling is a fixed property of the trait, deliberately not a function of the
+    // live gamw. Tying it to gamw made the two chase each other: a poor fit raised the
+    // residual, which lowered gamw, which lowered the ceiling, which shrank the prior,
+    // which worsened the fit. On 0.05%-causal simulations that ran the ceiling from
+    // 0.5 (the true h2) down past 0.30 within ten iterations. A fixed ceiling also
+    // removes the need for a separate cap on gamw itself: gamw can no longer buy the
+    // prior more signal budget by climbing, so the runaway it guarded against is gone.
     double S = 0.0;
     for (int j = 0; j < probs.size(); j++)
         S += probs[j] * vars[j];
 
-    double h2_prior  = (double) Mt / (double) N * S;
-    double h2_target = std::min( std::max( 1.0 - 1.0 / gamw, 1e-4 ), 0.95 );
+    double h2_prior = (double) Mt / (double) N * S;
+    double h2_max   = std::min( std::max( 1.0 - 1.0 / gamw_init, 1e-4 ), 0.95 );
 
-    if (h2_prior > h2_target){
-        double c = h2_target / h2_prior;
+    if (h2_prior > h2_max){
+        double c = h2_max / h2_prior;
         for (int j = 0; j < vars.size(); j++)
             vars[j] *= c;
 
         if (rank == 0)
-            std::cout << "[prior rescale] h2 " << h2_prior << " -> " << h2_target
+            std::cout << "[prior rescale] h2 " << h2_prior << " -> " << h2_max
                       << " (scale " << c << ")" << std::endl;
     }
 }
