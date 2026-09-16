@@ -418,6 +418,16 @@ void Options::read_command_line_options(int argc, char** argv) {
             rho = atof(argv[++i]);
             ss << "--rho " << rho << "\n";
         }
+        else if (!strcmp(argv[i], "--sublinear-var")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            int v = atoi(argv[++i]);
+            if (v != 0 && v != 1) {
+                std::cout << "FATAL  : option --sublinear-var must be 0/1!\n";
+                exit(EXIT_FAILURE);
+            }
+            sublinear_var = (unsigned int) v;
+            ss << "--sublinear-var " << sublinear_var << "\n";
+        }
         else if (!strcmp(argv[i], "--gamma-damp")){ // strcmp return 0 if both strings are identical
             if (i == argc - 1) fail_if_last(argv, i);
             gamma_damp = atof(argv[++i]);

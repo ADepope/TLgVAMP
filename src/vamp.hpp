@@ -47,6 +47,7 @@ private:
     double stop_criteria_thr; // = 1e-5;
     double gamma_damp;
     double gamw_damp;
+    unsigned int sublinear_var; // 0 = standard gam1; 1 = sublinear-sparsity gam1 (see infere())
 
     std::string model;
     std::string out_dir;

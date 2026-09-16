@@ -59,6 +59,7 @@ public:
     double get_gam1_add_info() const { return gam1_add_info; }
     double get_gamma_damp() const { return gamma_damp; }
     double get_gamw_damp() const { return gamw_damp >= 0 ? gamw_damp : gamma_damp; }
+    unsigned int get_sublinear_var() const { return sublinear_var; }
 
     unsigned int get_use_tl_lmmse() const { return use_tl_lmmse; }
 
@@ -137,6 +138,9 @@ private:
     double gam1_init = -1;
     double gamma_damp = 1;
     double gamw_damp = -1; // -1 sentinel: fall back to gamma_damp if --gamma-damp-gamw not passed
+    // 0 = standard proportional-regime gam1 (exact current behaviour). 1 = sublinear-sparsity
+    // variance message for gam1 (Takeuchi, arXiv:2512.03326, Alg. 1 line 13). See vamp.cpp.
+    unsigned int sublinear_var = 0;
     double gam1_add_info = 1;
     double a_scale = 1;
 

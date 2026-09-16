@@ -26,7 +26,7 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     init_est(opt.get_init_est()), max_iter(max_iter), rho(rho), vars(vars), seed(opt.get_seed()),
     probs(probs), out_dir(out_dir), out_name(out_name), true_signal(true_signal),
     estimate_file(opt.get_estimate_file()), learn_vars(opt.get_learn_vars()), model(model),
-    gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), use_freeze(opt.get_use_freeze()),
+    gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), redglob(opt.get_redglob()), rank(rank),
     r1_add_info_file(opt.get_r1_add_info_file()), scheduler(opt.get_scheduler()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -73,7 +73,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     true_signal(true_signal), model(opt.get_model()), redglob(opt.get_redglob()),
     init_est(opt.get_init_est()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), estimate_file(opt.get_estimate_file()),
-    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), rank(rank),
+    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), rank(rank),
     use_lmmse_damp(opt.get_use_lmmse_damp()),
     scheduler(opt.get_scheduler()), r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -359,6 +359,9 @@ std::vector<double> vamp::infere_linear(data* dataset){
             alpha1 /= Mt;
             eta1 = gam1 / alpha1;
 
+            if (rank == 0)
+                std::cout << "alpha1 = " << alpha1 << std::endl;
+
             if (it <= 1) break;
 
             gam1_reEst_prev = gam1;
@@ -604,6 +607,9 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
         eta2 = gam2 / alpha2;
 
+        if (rank == 0)
+            std::cout << "eta2 = " << eta2 << std::endl;
+
         // =========================================================================
         // ---- ADAPTIVE TRANSFER PRECISION (gamma_base & gamma_hyper) EM-UPDATE
         // =========================================================================
@@ -802,10 +808,48 @@ std::vector<double> vamp::infere_linear(data* dataset){
 
         gam2s.push_back(gam2);
         
-        gam1 = std::min( std::max( eta2 - gam2, gamma_min ), gamma_max );
+        // Extrinsic precision from the standard (proportional-sparsity) handoff identity.
+        // This is what the MEAN update for r1 must use: substituting eta2 = gam2/alpha2
+        // gives r1 = (x2_hat - alpha2*r2)/(1 - alpha2), which is exactly the GOAMP mean
+        // message (Takeuchi, arXiv:2512.03326, Alg. 1 line 13). The mean/Onsager side is
+        // identical between GVAMP and GOAMP, so it is deliberately left untouched here.
+        double gam1_extrinsic = std::min( std::max( eta2 - gam2, gamma_min ), gamma_max );
 
         for (int i = 0; i < M; i++)
-            r1[i] = (eta2 * x2_hat[i] - gam2 * r2[i]) / gam1;
+            r1[i] = (eta2 * x2_hat[i] - gam2 * r2[i]) / gam1_extrinsic;
+
+        if (sublinear_var == 1){
+            // Sublinear-sparsity variance message (Alg. 1 line 13):
+            //   v^{x,t}_{A->B} = M ||x_A - x_{B->A}||^2 / ( N (1 - xi^x_{A,t})^2 ),
+            // whose per-coordinate error is v/M, so the precision handed to the denoiser is
+            //   gam1 = M / v = N (1 - alpha2)^2 / ||x2_hat - r2||^2,
+            // with the paper's N = Mt (signal dimension) and xi^x_{A,t} = alpha2. Unlike
+            // eta2 - gam2 this is an empirical estimate from the realised LMMSE residual
+            // rather than the proportional-regime state-evolution identity, which is the
+            // one variance message that genuinely differs in the sublinear limit (gam2's
+            // update reduces to the GVAMP form exactly, since (M/N)*xi^x_{B,t} = alpha1).
+            //
+            // Assigned directly, with no damping: the sv=0 branch below assigns
+            // gam1_extrinsic outright, so damping only this branch would vary two things
+            // at once and make the A/B uninterpretable. Alg. 1's damping (lines 18-23)
+            // acts on the x_{B->A}/v_{B->A} messages, not on this one, so undamped is
+            // also the faithful reading.
+            double resid_sq = l2_norm2(x2_hat_m_r2, 1);
+            if (resid_sq > 0){
+                double one_m_alpha2 = 1.0 - alpha2;
+                double gam1_sublinear = (double) Mt * one_m_alpha2 * one_m_alpha2 / resid_sq;
+                gam1 = std::min( std::max( gam1_sublinear, gamma_min ), gamma_max );
+
+                if (rank == 0)
+                    std::cout << "[sublinear gam1] extrinsic = " << gam1_extrinsic
+                              << ", sublinear = " << gam1_sublinear
+                              << ", used = " << gam1 << std::endl;
+            } else {
+                gam1 = gam1_extrinsic;
+            }
+        } else {
+            gam1 = gam1_extrinsic;
+        }
 
         if (rank == 0) std::cout << "gam1 = " << gam1 << std::endl;
 
@@ -1078,6 +1122,20 @@ void vamp::updateNoisePrec(data* dataset){
 
     double gamw_candidate = (double) N / (temp_norm2 + trace_corr);
     gamw = gamw_damp * gamw_candidate + (1.0 - gamw_damp) * gamw;
+
+    // gamw's implied noise variance (1/gamw) must not shrink below what a 95% heritability
+    // bound allows, mirroring the cap already applied to the prior in updatePrior(). Without
+    // this, gamw and the prior can inflate each other's overconfidence indefinitely: gamw has
+    // no other bound, and the prior's h2 cap tracks gamw itself, so it never engages if gamw
+    // is the one running away (observed on real data -- gamw climbing unbounded for iterations
+    // with zero prior-rescale events, train R2 approaching 1 while validation R2 stayed near 0).
+    double var_y = calc_stdev(y) * calc_stdev(y);
+    double gamw_max = 1.0 / ( (1.0 - 0.95) * var_y );
+    if (gamw > gamw_max){
+        if (rank == 0)
+            std::cout << "[gamw cap] gamw " << gamw << " -> " << gamw_max << std::endl;
+        gamw = gamw_max;
+    }
 }
 
 void vamp::updatePrior(int verbose = 1) {
@@ -1204,31 +1262,33 @@ void vamp::updatePrior(int verbose = 1) {
     }
 
     // vars are scaled by N, so the prior implies h2 = (Mt/N) * sum(probs*vars).
-    // The EM above is unconstrained and can push this far above 1, so cap it at the
-    // heritability the run was initialised with: gamw_init comes from --gamw, or from
-    // --h2 via gamw = 1/(1-h2) in main_real.cpp, so 1 - 1/gamw_init recovers that h2.
+    // The EM above is unconstrained and can push this far above 1; rescale it back
+    // onto the noise model's signal budget. One-sided: a small h2 is left untouched.
     //
-    // The ceiling is a fixed property of the trait, deliberately not a function of the
-    // live gamw. Tying it to gamw made the two chase each other: a poor fit raised the
-    // residual, which lowered gamw, which lowered the ceiling, which shrank the prior,
-    // which worsened the fit. On 0.05%-causal simulations that ran the ceiling from
-    // 0.5 (the true h2) down past 0.30 within ten iterations. A fixed ceiling also
-    // removes the need for a separate cap on gamw itself: gamw can no longer buy the
-    // prior more signal budget by climbing, so the runaway it guarded against is gone.
+    // Reverted from a fixed-ceiling variant (h2 capped at the run's starting gamw
+    // rather than the live one): decoupling this from live gamw removed an
+    // accidental stabilizer -- gamw itself started oscillating and val R2 collapsed
+    // late in the run on 0.05%-causal simulations, and gamw's own independent cap
+    // (see updateNoisePrec) did not catch it, since gamw was crashing toward zero,
+    // not diverging upward. The live coupling also did not move the achievable peak
+    // R2 or the best iteration (still 3-5) on the one case tested, so there was no
+    // offsetting accuracy gain to justify the loss of stability. Kept here as the
+    // known-safe default; see the config-grid and initialization experiments
+    // (gvamp_conf.csv IDs 13-17) for the actual accuracy lever being tested instead.
     double S = 0.0;
     for (int j = 0; j < probs.size(); j++)
         S += probs[j] * vars[j];
 
-    double h2_prior = (double) Mt / (double) N * S;
-    double h2_max   = std::min( std::max( 1.0 - 1.0 / gamw_init, 1e-4 ), 0.95 );
+    double h2_prior  = (double) Mt / (double) N * S;
+    double h2_target = std::min( std::max( 1.0 - 1.0 / gamw, 1e-4 ), 0.95 );
 
-    if (h2_prior > h2_max){
-        double c = h2_max / h2_prior;
+    if (h2_prior > h2_target){
+        double c = h2_target / h2_prior;
         for (int j = 0; j < vars.size(); j++)
             vars[j] *= c;
 
         if (rank == 0)
-            std::cout << "[prior rescale] h2 " << h2_prior << " -> " << h2_max
+            std::cout << "[prior rescale] h2 " << h2_prior << " -> " << h2_target
                       << " (scale " << c << ")" << std::endl;
     }
 }
