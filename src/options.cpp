@@ -418,6 +418,35 @@ void Options::read_command_line_options(int argc, char** argv) {
             rho = atof(argv[++i]);
             ss << "--rho " << rho << "\n";
         }
+        else if (!strcmp(argv[i], "--use-maf-tl")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            int v = atoi(argv[++i]);
+            if (v != 0 && v != 1) {
+                std::cout << "FATAL  : option --use-maf-tl must be 0/1!\n";
+                exit(EXIT_FAILURE);
+            }
+            use_maf_tl = (unsigned int) v;
+            ss << "--use-maf-tl " << use_maf_tl << "\n";
+        }
+        else if (!strcmp(argv[i], "--gamma-hyper")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            gamma_hyper = atof(argv[++i]);
+            if (gamma_hyper < 0.0) {
+                std::cout << "FATAL  : option --gamma-hyper must be non-negative!\n";
+                exit(EXIT_FAILURE);
+            }
+            ss << "--gamma-hyper " << gamma_hyper << "\n";
+        }
+        else if (!strcmp(argv[i], "--tl-mask-missing")){ // strcmp return 0 if both strings are identical
+            if (i == argc - 1) fail_if_last(argv, i);
+            int v = atoi(argv[++i]);
+            if (v != 0 && v != 1) {
+                std::cout << "FATAL  : option --tl-mask-missing must be 0/1!\n";
+                exit(EXIT_FAILURE);
+            }
+            tl_mask_missing = (unsigned int) v;
+            ss << "--tl-mask-missing " << tl_mask_missing << "\n";
+        }
         else if (!strcmp(argv[i], "--sublinear-var")){ // strcmp return 0 if both strings are identical
             if (i == argc - 1) fail_if_last(argv, i);
             int v = atoi(argv[++i]);

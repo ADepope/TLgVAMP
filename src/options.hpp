@@ -60,6 +60,9 @@ public:
     double get_gamma_damp() const { return gamma_damp; }
     double get_gamw_damp() const { return gamw_damp >= 0 ? gamw_damp : gamma_damp; }
     unsigned int get_sublinear_var() const { return sublinear_var; }
+    unsigned int get_tl_mask_missing() const { return tl_mask_missing; }
+    unsigned int get_use_maf_tl() const { return use_maf_tl; }
+    double get_gamma_hyper() const { return gamma_hyper; }
 
     unsigned int get_use_tl_lmmse() const { return use_tl_lmmse; }
 
@@ -141,6 +144,17 @@ private:
     // 0 = standard proportional-regime gam1 (exact current behaviour). 1 = sublinear-sparsity
     // variance message for gam1 (Takeuchi, arXiv:2512.03326, Alg. 1 line 13). See vamp.cpp.
     unsigned int sublinear_var = 0;
+    // 1 = in the TL-LMMSE combination, skip source ancestries that carry no genotype data
+    // at a SNP on the joint union panel, instead of letting them contribute a confident
+    // zero. Default on: the old behaviour is a bug, not a modelling choice.
+    unsigned int tl_mask_missing = 1;
+    // MAF-difference re-weighting of TL sources: w_si = exp(-gamma_hyper * (maf_t - maf_s)^2).
+    // Default OFF. It was hardcoded on with gamma_hyper=200, but read_maf_from_frq's failbit
+    // bug made every MAF 0, so w_si was identically 1 in every run to date -- i.e. off in
+    // practice. Defaulting to 0 preserves that actual behaviour; enabling it is a modelling
+    // change to be evaluated on its own, not a side effect of fixing the reader.
+    unsigned int use_maf_tl = 0;
+    double gamma_hyper = 200.0;
     double gam1_add_info = 1;
     double a_scale = 1;
 

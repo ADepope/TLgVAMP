@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include "utilities.hpp"
+#include <sstream>
 #include<boost/math/distributions/students_t.hpp>
 
 double round_dp(const double in) {
@@ -405,34 +406,72 @@ double erfcx (double x)
     return r;
 }
 
-std::vector<double> read_maf_from_frq(std::string filepath, int M, int S) {
+// Reads the MAF column of a PLINK .frq file for this rank's slice of M SNPs.
+//
+// Parsed line-by-line rather than by streaming operator>>. The previous version did
+//     file >> chr >> snp >> a1 >> a2 >> maf >> nchrobs
+// with maf a double, so a PLINK "NA" (written for SNPs with NCHROBS==0, i.e. SNPs the
+// union panel carries but this ancestry has no data for) failed the extraction AND set
+// the stream's failbit, which was never cleared -- so every subsequent SNP silently
+// became 0.0. In these panels the first NA lands within the first ~10 SNPs, so the whole
+// MAF vector was zeros and the MAF re-weighting in the TL step was inert.
+//
+// `avail`, when non-null, is filled with 1.0 for SNPs this ancestry actually has data
+// for and 0.0 for NA / NCHROBS==0 SNPs, so callers can mask absent sources instead of
+// treating them as a confident zero effect.
+std::vector<double> read_maf_from_frq(std::string filepath, int M, int S,
+                                      std::vector<double>* avail) {
     std::vector<double> mafs;
+    mafs.reserve(M);
+    if (avail) { avail->clear(); avail->reserve(M); }
+
     std::ifstream file(filepath);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open MAF file: " + filepath);
     }
 
     std::string line;
-    // 1. Skip the header line
-    std::getline(file, line);
+    std::getline(file, line);                      // header
 
-    // 2. Skip the first S SNPs (rows) to get to this rank's data
-    for (int i = 0; i < S; ++i) {
+    for (int i = 0; i < S; ++i) {                  // skip to this rank's slice
         if (!std::getline(file, line)) break;
     }
 
-    // 3. Read exactly M SNPs for this rank
-    std::string chr, snp, a1, a2;
-    double maf;
-    int nchrobs;
-
     for (int i = 0; i < M; ++i) {
-        if (file >> chr >> snp >> a1 >> a2 >> maf >> nchrobs) {
-            mafs.push_back(maf);
-        } else {
-            // If the file ends early, fill with 0.0 or handle error
+        if (!std::getline(file, line)) {           // file ended early
             mafs.push_back(0.0);
+            if (avail) avail->push_back(0.0);
+            continue;
         }
+
+        std::istringstream iss(line);
+        std::string chr, snp, a1, a2, maf_tok, nchrobs_tok;
+        iss >> chr >> snp >> a1 >> a2 >> maf_tok >> nchrobs_tok;
+
+        double maf = 0.0;
+        bool ok = false;
+
+        if (!maf_tok.empty() && maf_tok != "NA" && maf_tok != "nan") {
+            try {
+                maf = std::stod(maf_tok);
+                ok = true;
+            } catch (const std::exception&) {
+                maf = 0.0;
+                ok = false;
+            }
+        }
+
+        // PLINK writes NCHROBS==0 for SNPs with no observed genotypes in this sample.
+        if (ok && !nchrobs_tok.empty()) {
+            try {
+                if (std::stol(nchrobs_tok) == 0) ok = false;
+            } catch (const std::exception&) { /* leave ok as-is */ }
+        }
+
+        if (!ok) maf = 0.0;
+
+        mafs.push_back(maf);
+        if (avail) avail->push_back(ok ? 1.0 : 0.0);
     }
 
     file.close();

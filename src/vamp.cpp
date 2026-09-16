@@ -26,7 +26,7 @@ vamp::vamp(int N, int M,  int Mt, double gam1, double gamw, int max_iter, double
     init_est(opt.get_init_est()), max_iter(max_iter), rho(rho), vars(vars), seed(opt.get_seed()),
     probs(probs), out_dir(out_dir), out_name(out_name), true_signal(true_signal),
     estimate_file(opt.get_estimate_file()), learn_vars(opt.get_learn_vars()), model(model),
-    gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), use_freeze(opt.get_use_freeze()),
+    gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), tl_mask_missing(opt.get_tl_mask_missing()), use_maf_tl(opt.get_use_maf_tl()), gamma_hyper(opt.get_gamma_hyper()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), redglob(opt.get_redglob()), rank(rank),
     r1_add_info_file(opt.get_r1_add_info_file()), scheduler(opt.get_scheduler()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -73,7 +73,7 @@ vamp::vamp(int M, double gam1, double gamw, std::vector<double> true_signal, int
     true_signal(true_signal), model(opt.get_model()), redglob(opt.get_redglob()),
     init_est(opt.get_init_est()), use_freeze(opt.get_use_freeze()),
     freeze_index_file(opt.get_freeze_index_file()), estimate_file(opt.get_estimate_file()),
-    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), rank(rank),
+    store_pvals(opt.get_store_pvals()), gamma_damp(opt.get_gamma_damp()), gamw_damp(opt.get_gamw_damp()), sublinear_var(opt.get_sublinear_var()), tl_mask_missing(opt.get_tl_mask_missing()), use_maf_tl(opt.get_use_maf_tl()), gamma_hyper(opt.get_gamma_hyper()), rank(rank),
     use_lmmse_damp(opt.get_use_lmmse_damp()),
     scheduler(opt.get_scheduler()), r1_add_info_file(opt.get_r1_add_info_file()),
     gam1_add_info(opt.get_gam1_add_info()), a_scale_start_iter(opt.get_a_scale_start_iter()),
@@ -154,13 +154,21 @@ std::vector<double> vamp::infere( data* dataset ){
         const std::size_t nsrc = maf_pop2_files.size();
 
         // Load target MAF once
-        maf_pop1_target = read_maf_from_frq(maf_pop1_file, M, S);
+        maf_pop1_target = read_maf_from_frq(maf_pop1_file, M, S, &avail_pop1_target);
 
         // Load one source MAF per TL source
         maf_pop2_sources.resize(nsrc);
+        avail_pop2_sources.resize(nsrc);
 
         for (std::size_t s = 0; s < nsrc; ++s) {
-            maf_pop2_sources[s] = read_maf_from_frq(maf_pop2_files[s], M, S);
+            maf_pop2_sources[s] = read_maf_from_frq(maf_pop2_files[s], M, S, &avail_pop2_sources[s]);
+
+            if (rank == 0) {
+                long navail = 0;
+                for (double v : avail_pop2_sources[s]) if (v > 0.0) navail++;
+                std::cout << "[TL-LMMSE] source " << s << " has data for "
+                          << navail << " / " << M << " SNPs on this rank\n";
+            }
 
             if (rank == 0) {
                 std::cout << "[TL-LMMSE] Loaded source MAF " << s
@@ -546,6 +554,20 @@ std::vector<double> vamp::infere_linear(data* dataset){
                 double rhs_sum_i = 0.0;
 
                 for (std::size_t s = 0; s < nsrc; ++s) {
+                    // The joint panel is the union over ancestries, so a source may carry
+                    // no genotype data at this SNP. Its r1 there is ~0 only because the
+                    // denoiser saw a constant column, not because the effect is estimated
+                    // to be zero -- feeding that in at full precision actively drags the
+                    // target's estimate toward zero. Contribute neither precision nor a
+                    // value for such SNPs; if no source has data the SNP simply falls back
+                    // to target-only inference (gamma_tl_vec[i] == 0).
+                    if (tl_mask_missing == 1 &&
+                        s < avail_pop2_sources.size() &&
+                        !avail_pop2_sources[s].empty() &&
+                        avail_pop2_sources[s][i] == 0.0) {
+                        continue;
+                    }
+
                     double w_si = 1.0;
 
                     if (use_maf_tl &&

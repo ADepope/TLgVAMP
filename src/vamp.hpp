@@ -95,8 +95,15 @@ private:
     std::vector<double> gamma_tl_vec;   // gamma_tl_vec[i] = sum_s gamma_s_i
     std::vector<double> tl_rhs_vec;     // tl_rhs_vec[i] = sum_s gamma_s_i * r_tls[s][i]
 
-    bool use_maf_tl = true;
-    double gamma_hyper = 200.0;
+    unsigned int use_maf_tl;   // from --use-maf-tl (default 0)
+    double gamma_hyper;        // from --gamma-hyper (default 200)
+
+    // Per-source availability on the joint (union) panel: 1.0 where that source ancestry
+    // actually has genotype data for the SNP, 0.0 where the union panel carries it but the
+    // ancestry does not. Used to stop absent sources contributing a spurious confident zero.
+    std::vector<double> avail_pop1_target;
+    std::vector< std::vector<double> > avail_pop2_sources;
+    unsigned int tl_mask_missing;
 
 public:
 
